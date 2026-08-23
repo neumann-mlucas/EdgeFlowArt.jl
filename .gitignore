@@ -1,0 +1,7 @@
+Manifest.toml
+dev/Manifest.toml
+test/results/
+test/artifacts/
+test/fixtures/_inputs/
+*.log
+.DS_Store
