@@ -18,19 +18,21 @@ function main()
     field_sym = Symbol(args["field"])
     field_sym in (:sobel, :dt, :tangent) ||
         error("--field must be sobel|dt|tangent (got $(args["field"]))")
+    # ponytail: no GIF yet (render returns no frames); fail loud instead of writing nothing
+    :gif in formats && error("GIF output not supported yet; use .png or .svg")
 
     cfg = EdgeFlowArt.Config(
-        size = args["size"],
-        steps = args["steps"],
-        points = args["points"],
-        eta = Float32(args["eta"]),
-        field = field_sym,
-        tau = Float32(args["tau"]),
-        sigma = Float32(args["sigma"]),
-        stroke_width = args["stroke-width"],
-        opacity = args["opacity"],
-        seed = args["seed"],
-        formats = formats,
+        size=args["size"],
+        steps=args["steps"],
+        points=args["points"],
+        eta=Float32(args["eta"]),
+        field=field_sym,
+        tau=Float32(args["tau"]),
+        sigma=Float32(args["sigma"]),
+        stroke_width=args["stroke-width"],
+        opacity=args["opacity"],
+        seed=args["seed"],
+        formats=formats,
     )
     ts = cfg.timer
     Random.seed!(cfg.seed)
@@ -58,10 +60,10 @@ end
 
 function parse_cmd()
     parser = ArgParseSettings(
-        description = "EdgeFlowArt - image → flow-line rendering",
-        epilog = "Example: julia main.jl -i input.jpg -o out.svg --field tangent --points 5000",
+        description="EdgeFlowArt - image → flow-line rendering",
+        epilog="Example: julia main.jl -i input.jpg -o out.svg --field tangent --points 5000",
     )
-    EdgeFlowArt.add_common_args!(parser; steps_default = 200)
+    EdgeFlowArt.add_common_args!(parser; steps_default=200)
     @add_arg_table! parser begin
         "--size", "-s"
         help = "output canvas size in pixels"

@@ -12,12 +12,12 @@ to_gray(img::AbstractMatrix)::Matrix{Float32} = Float32.(Gray.(img))
 function normalize_field!(Fx::Matrix{Float32}, Fy::Matrix{Float32})
     @inbounds for i in eachindex(Fx)
         m = sqrt(Fx[i]^2 + Fy[i]^2)
-        if m > 1f-6
+        if m > 1.0f-6
             Fx[i] /= m
             Fy[i] /= m
         else
-            Fx[i] = 0f0
-            Fy[i] = 0f0
+            Fx[i] = 0.0f0
+            Fy[i] = 0.0f0
         end
     end
     return nothing
@@ -51,7 +51,7 @@ function field_dt(gray::Matrix{Float32}, tau::Float32)
     if !any(B)
         return Fx, Fy
     end
-    # feature_transform on inverted mask: for each non-edge pixel, index of nearest edge.
+    # feature_transform(B): per pixel, index of nearest edge (true) pixel.
     ft = feature_transform(B)
     D = Float32.(distance_transform(ft))
     Dx, Dy = sobel_xy(D)
@@ -69,7 +69,7 @@ function field_tangent(gray::Matrix{Float32}, sigma::Float32)
     Gx, Gy = sobel_xy(Float32.(smoothed))
     # Tangent = 90° rotation of gradient
     Fx = -Gy
-    Fy =  Gx
+    Fy = Gx
     normalize_field!(Fx, Fy)
     return Fx, Fy
 end
