@@ -20,7 +20,7 @@ Base.@kwdef struct Config
     points::Int = 3000             # particle count
     eta::Float32 = 1.0f0           # step size (px per step)
     tau::Float32 = 0.15f0          # seeding: edge threshold on Sobel magnitude
-    sigma::Float32 = 1.5f0         # Tangent: pre-blur sigma (px)
+    sigma::Float32 = 1.5f0         # structure-tensor smoothing sigma (px)
     stroke_width::Float64 = 1.0
     opacity::Float64 = 0.9
     seed::Int = 42

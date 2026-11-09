@@ -26,6 +26,15 @@ end
         @test sum(abs.(Fy[:, col])) > sum(abs.(Fx[:, col]))
     end
 
+    @testset "structure tensor: thin line keeps a field on its centre" begin
+        line = ones(Float32, 64, 64)
+        line[:, 32] .= 0                                  # 1-px dark vertical line
+        Fx, Fy = EdgeFlowArt.field_tangent(line, 1.5f0)
+        c = hypot.(Fx, Fy)[8:56, 32]
+        @test minimum(c) > 0.3                            # gradient version: ≈ 0 here
+        @test sum(abs.(Fy[8:56, 32])) > 10 * sum(abs.(Fx[8:56, 32]))
+    end
+
     @testset "particles glide along the edge" begin
         gray = EdgeFlowArt.to_gray(striped(64))
         Fx, Fy = EdgeFlowArt.field_tangent(gray, 1.0f0)

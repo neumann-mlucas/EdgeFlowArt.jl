@@ -42,7 +42,7 @@ CLI knobs:
 --steps K                   default 200            steps per direction from seed
 --eta E                     default 1.0            step size (px per step)
 --tau T                     default 0.15           seeding: edge threshold
---sigma S                   default 1.5            tangent: pre-blur sigma
+--sigma S                   default 1.5            structure-tensor sigma
 --stroke-width W            default 1.0
 --opacity A                 default 0.9
 --seed                      default 42

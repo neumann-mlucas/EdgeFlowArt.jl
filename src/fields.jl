@@ -1,5 +1,5 @@
 # Image-derived tangent field for particle advection + edge mask for seeding.
-# Field is (Fx, Fy), size (H, W), Float32, length < 1 scaled by gradient strength.
+# Field is (Fx, Fy), size (H, W), Float32, length < 1 scaled by edge coherence.
 
 using ImageFiltering
 using Images: Gray
@@ -45,15 +45,22 @@ function edge_mask(gray::Matrix{Float32}, tau::Float32)::BitMatrix
     return E .> min(tau, quantile(vec(E), 1 - EDGE_TOP))
 end
 
-# Tangent-flow field: perpendicular to gradient. Particles glide along edges.
-# ponytail: skips full structure-tensor eigendecomp + coherence weighting;
-# upgrade path is smoothed J = G_σ * (∇I)(∇I)ᵀ then eig per pixel.
+# Tangent-flow field from the smoothed structure tensor
+# J = G_σ * (∇I ∇Iᵀ). Smoothing J (not I) keeps both flanks of a thin line
+# (opposite gradients) instead of cancelling them, and averages orientation
+# over σ so texture noise doesn't flip directions. Direction = minor
+# eigenvector (along the edge); magnitude = √(λ1 − λ2), strong where the
+# orientation is coherent, ~0 in flat or isotropic texture.
 function field_tangent(gray::Matrix{Float32}, sigma::Float32)
-    smoothed = imfilter(gray, Kernel.gaussian(sigma))
-    Gx, Gy = sobel_xy(Float32.(smoothed))
-    # Tangent = 90° rotation of gradient
-    Fx = -Gy
-    Fy = Gx
+    Gx, Gy = sobel_xy(gray)
+    k = Kernel.gaussian(sigma)
+    Jxx = imfilter(Gx .* Gx, k)
+    Jxy = imfilter(Gx .* Gy, k)
+    Jyy = imfilter(Gy .* Gy, k)
+    θ = @. 0.5f0 * atan(2Jxy, Jxx - Jyy)             # gradient orientation
+    m = @. sqrt(sqrt((Jxx - Jyy)^2 + 4Jxy^2))         # √(λ1 − λ2)
+    Fx = @. -sin(θ) * m
+    Fy = @. cos(θ) * m
     normalize_field!(Fx, Fy)
     return Fx, Fy
 end

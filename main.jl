@@ -78,7 +78,7 @@ function parse_cmd()
         arg_type = Float64
         default = 0.15
         "--sigma"
-        help = "tangent field: Gaussian pre-blur sigma (px)"
+        help = "tangent field: structure-tensor smoothing sigma (px)"
         arg_type = Float64
         default = 1.5
         "--stroke-width"
