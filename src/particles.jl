@@ -76,3 +76,12 @@ function integrate(
     end
     return trajs
 end
+
+# Paths whose bbox is smaller than this (px) are dropped as static dots.
+const MIN_EXTENT = 1.0f0
+
+# Larger bbox side of a trajectory (px).
+function extent(traj::Vector{Point2})::Float32
+    xs, ys = first.(traj), last.(traj)
+    max(maximum(xs) - minimum(xs), maximum(ys) - minimum(ys))
+end

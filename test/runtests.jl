@@ -67,4 +67,19 @@ end
         @test occursin("<polyline", svg)
         @test isempty(gif)
     end
+
+    @testset "static paths dropped" begin
+        # flat image → zero field → no particle moves → nothing drawn
+        cfg = EdgeFlowArt.Config(
+            size=32,
+            steps=10,
+            points=20,
+            field=:sobel,
+            formats=Set([:svg]),
+        )
+        _, svg, _ = EdgeFlowArt.render(fill(RGB{N0f8}(0.5, 0.5, 0.5), 32, 32), cfg)
+        @test !occursin("<polyline", svg)
+        @test EdgeFlowArt.extent([(1.0f0, 1.0f0), (1.4f0, 1.2f0)]) < EdgeFlowArt.MIN_EXTENT
+        @test EdgeFlowArt.extent([(1.0f0, 1.0f0), (3.0f0, 1.0f0)]) == 2.0f0
+    end
 end
