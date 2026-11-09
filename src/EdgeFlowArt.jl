@@ -55,7 +55,7 @@ function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{
     seeds = seed_edges(cfg.points, edge_mask(gray, cfg.tau), rng)
 
     @info ts() * "Integrating $(cfg.steps) steps"
-    trajs = integrate(seeds, Fx, Fy, cfg.steps, cfg.eta)
+    trajs = filter!(t -> length(t) > 1, integrate(seeds, Fx, Fy, cfg.steps, cfg.eta))
 
     @info ts() * "Sampling colors"
     colors = [path_color(input, t) for t in trajs]

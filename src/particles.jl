@@ -47,6 +47,13 @@ end
 # of trajectories. The field has a 180° ambiguity that would fold curves back on
 # themselves, so each step is aligned with the previous displacement to keep
 # advection monotone along the streamline.
+# Occupancy cell size (px). A particle stops on entering a cell another particle
+# already drew through, so strokes don't stack on the same contour (pile-up).
+# Seeds landing in a taken cell never start (1-point trajectory).
+# ponytail: fixed-grid first-come ownership, Jobard–Lefer distance test if
+# grid-aligned gaps show.
+const SPACING = 2.0f0
+
 function integrate(
     seeds::Vector{Point2},
     Fx::Matrix{Float32},
@@ -56,14 +63,20 @@ function integrate(
 )::Vector{Vector{Point2}}
     h, w = size(Fx)
     n = length(seeds)
-    trajs = [Vector{Point2}(undef, steps + 1) for _ = 1:n]
+    owner = zeros(Int32, cld(h, Int(SPACING)) + 1, cld(w, Int(SPACING)) + 1)
+    cell(x, y) =
+        CartesianIndex(floor(Int, (y - 1) / SPACING) + 1, floor(Int, (x - 1) / SPACING) + 1)
+    trajs = [Point2[s] for s in seeds]
+    alive = trues(n)
     prev = zeros(Float32, n, 2)
     for i = 1:n
-        trajs[i][1] = seeds[i]
+        c = cell(seeds[i]...)
+        owner[c] == 0 ? (owner[c] = i) : (alive[i] = false)
     end
-    @inbounds for k = 1:steps
+    @inbounds for _ = 1:steps
         for i = 1:n
-            x, y = trajs[i][k]
+            alive[i] || continue
+            x, y = trajs[i][end]
             vx, vy = sample_field(Fx, Fy, x, y)
             if vx * prev[i, 1] + vy * prev[i, 2] < 0.0f0
                 vx = -vx
@@ -71,9 +84,15 @@ function integrate(
             end
             xn = clamp(x + eta * vx, 1.0f0, Float32(w))
             yn = clamp(y + eta * vy, 1.0f0, Float32(h))
+            c = cell(xn, yn)
+            if owner[c] != 0 && owner[c] != i
+                alive[i] = false
+                continue
+            end
+            owner[c] = i
             prev[i, 1] = xn - x
             prev[i, 2] = yn - y
-            trajs[i][k+1] = (xn, yn)
+            push!(trajs[i], (xn, yn))
         end
     end
     return trajs

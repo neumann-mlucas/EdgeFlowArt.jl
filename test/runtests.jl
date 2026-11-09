@@ -33,10 +33,10 @@ end
         seeds = EdgeFlowArt.seed_edges(50, mask, MersenneTwister(0))
         trajs = EdgeFlowArt.integrate(seeds, Fx, Fy, 20, 1.0f0)
         @test length(trajs) == 50
-        @test all(length(t) == 21 for t in trajs)
+        @test all(length(t) <= 21 for t in trajs)
         # stays on the vertical edge, moves vertically
         @test all(abs(p[1] - 32) < 3 for t in trajs for p in t)
-        @test mean(abs(t[end][2] - t[1][2]) for t in trajs) > 5
+        @test maximum(abs(t[end][2] - t[1][2]) for t in trajs) > 5
     end
 
     @testset "render pipeline" begin
@@ -63,6 +63,21 @@ end
         flat = mean(mag[8:56, 6:20])          # noise-only region
         @test edge > 0.4
         @test flat < 0.25 * edge
+    end
+
+    @testset "spacing: no two strokes share a cell" begin
+        gray = EdgeFlowArt.to_gray(striped(64))
+        Fx, Fy = EdgeFlowArt.field_tangent(gray, 1.0f0)
+        # many seeds on one contour: without spacing they would all overlap
+        seeds = [(32.0f0, Float32(y)) for y = 10:2:30]
+        trajs = EdgeFlowArt.integrate(seeds, Fx, Fy, 40, 1.0f0)
+        owners = Dict{Tuple{Int,Int},Set{Int}}()
+        for (i, t) in enumerate(trajs), p in t
+            c = (floor(Int, (p[2] - 1) / 2), floor(Int, (p[1] - 1) / 2))
+            push!(get!(owners, c, Set{Int}()), i)
+        end
+        @test all(length(v) == 1 for v in values(owners))
+        @test sum(length, trajs) < length(seeds) * 41 ÷ 2   # most got cut short
     end
 
     @testset "path color = mean along trajectory" begin
