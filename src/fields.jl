@@ -51,10 +51,14 @@ end
 
 # DT-descent field: threshold Sobel, distance-transform, F = -∇D. Every
 # pixel pulled to nearest edge.
-function field_dt(gray::Matrix{Float32}, tau::Float32)
+# Edge pixels: Sobel magnitude above tau.
+function edge_mask(gray::Matrix{Float32}, tau::Float32)::BitMatrix
     Gx, Gy = sobel_xy(gray)
-    E = @. sqrt(Gx^2 + Gy^2)
-    B = E .> tau
+    return @. sqrt(Gx^2 + Gy^2) > tau
+end
+
+function field_dt(gray::Matrix{Float32}, tau::Float32)
+    B = edge_mask(gray, tau)
     Fx = zeros(Float32, size(gray))
     Fy = zeros(Float32, size(gray))
     if !any(B)

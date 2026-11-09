@@ -117,6 +117,16 @@ end
         @test 0.4 < Float32(c.r) < 0.6
     end
 
+    @testset "edge seeding" begin
+        gray = EdgeFlowArt.to_gray(striped(64))
+        mask = EdgeFlowArt.edge_mask(gray, 0.15f0)
+        seeds = EdgeFlowArt.seed_edges(200, mask, MersenneTwister(0))
+        @test length(seeds) == 200
+        @test all(abs(s[1] - 32) < 3 for s in seeds)  # all on the stripe boundary
+        flat = EdgeFlowArt.seed_edges(5, falses(8, 8), MersenneTwister(0))
+        @test length(flat) == 5                          # no edges → uniform fallback
+    end
+
     @testset "static paths dropped" begin
         # flat image → zero field → no particle moves → nothing drawn
         cfg = EdgeFlowArt.Config(

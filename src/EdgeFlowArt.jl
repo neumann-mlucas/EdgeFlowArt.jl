@@ -53,7 +53,12 @@ function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{
 
     @info ts() * "Seeding $(cfg.points) particles"
     rng = MersenneTwister(cfg.seed)
-    seeds = seed_uniform(cfg.points, w, h, rng)
+    # tangent: start on edges so every stroke traces a contour, none wasted on flat areas
+    seeds = if cfg.field === :tangent
+        seed_edges(cfg.points, edge_mask(gray, cfg.tau), rng)
+    else
+        seed_uniform(cfg.points, w, h, rng)
+    end
 
     @info ts() * "Integrating $(cfg.steps) steps"
     align = cfg.field === :tangent

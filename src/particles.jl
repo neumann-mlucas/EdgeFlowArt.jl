@@ -38,6 +38,19 @@ function seed_uniform(n::Int, w::Int, h::Int, rng::AbstractRNG)::Vector{Point2}
     ]
 end
 
+# Seeds on random edge pixels (± 0.5 px jitter); uniform if there are none.
+function seed_edges(n::Int, mask::BitMatrix, rng::AbstractRNG)::Vector{Point2}
+    h, w = size(mask)
+    idx = findall(mask)
+    isempty(idx) && return seed_uniform(n, w, h, rng)
+    map(rand(rng, idx, n)) do c
+        (
+            clamp(c[2] + rand(rng, Float32) - 0.5f0, 1.0f0, Float32(w)),
+            clamp(c[1] + rand(rng, Float32) - 0.5f0, 1.0f0, Float32(h)),
+        )
+    end
+end
+
 # Integrate n particles for K steps. Returns Vector of trajectories.
 # align_tangent: for tangent field the 180° ambiguity would fold curves back on
 # themselves; align each step with the previous displacement to keep advection
