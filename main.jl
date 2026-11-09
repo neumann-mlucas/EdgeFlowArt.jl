@@ -84,11 +84,11 @@ function parse_cmd()
         "--stroke-width"
         help = "SVG stroke width"
         arg_type = Float64
-        default = 0.6
+        default = 1.0
         "--opacity"
         help = "stroke opacity in [0, 1]"
         arg_type = Float64
-        default = 0.6
+        default = 0.9
         "--seed"
         help = "RNG seed"
         arg_type = Int

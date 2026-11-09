@@ -67,15 +67,10 @@ function integrate(
     owner = zeros(Int32, cld(h, Int(SPACING)) + 1, cld(w, Int(SPACING)) + 1)
     cell(x, y) =
         CartesianIndex(floor(Int, (y - 1) / SPACING) + 1, floor(Int, (x - 1) / SPACING) + 1)
-    trajs = [Point2[s] for s in seeds]
-    # one full stroke at a time (seed order = random): first strokes run long,
-    # later ones fill the gaps; a seed in a taken cell is skipped.
-    @inbounds for i = 1:n
-        x, y = seeds[i]
-        c = cell(x, y)
-        owner[c] == 0 || continue
-        owner[c] = i
-        px, py = 0.0f0, 0.0f0
+    # Follow the streamline from (x, y) starting in direction (px, py) until
+    # it enters a cell owned by another stroke or runs out of steps.
+    function trace(x, y, px, py, i)
+        pts = Point2[]
         for _ = 1:steps
             vx, vy = sample_field(Fx, Fy, x, y)
             if vx * px + vy * py < 0.0f0
@@ -89,8 +84,23 @@ function integrate(
             owner[c] = i
             px, py = xn - x, yn - y
             x, y = xn, yn
-            push!(trajs[i], (x, y))
+            push!(pts, (x, y))
         end
+        return pts
+    end
+    trajs = [Point2[s] for s in seeds]
+    # one full stroke at a time (seed order = random): first strokes run long,
+    # later ones fill the gaps; a seed in a taken cell is skipped. Each stroke
+    # is traced both ways from its seed.
+    @inbounds for i = 1:n
+        x, y = seeds[i]
+        c = cell(x, y)
+        owner[c] == 0 || continue
+        owner[c] = i
+        vx, vy = sample_field(Fx, Fy, x, y)
+        fwd = trace(x, y, vx, vy, i)
+        bwd = trace(x, y, -vx, -vy, i)
+        trajs[i] = [reverse!(bwd); seeds[i]; fwd]
     end
     return trajs
 end

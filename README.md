@@ -39,12 +39,12 @@ CLI knobs:
 --output OUTPUT             .png / .svg (comma-separate for both; .gif errors)
 --size S                    default 512
 --points N                  default 3000
---steps K                   default 200            per-particle integration steps
+--steps K                   default 200            steps per direction from seed
 --eta E                     default 1.0            step size (px per step)
 --tau T                     default 0.15           seeding: edge threshold
 --sigma S                   default 1.5            tangent: pre-blur sigma
---stroke-width W            default 0.6
---opacity A                 default 0.6
+--stroke-width W            default 1.0
+--opacity A                 default 0.9
 --seed                      default 42
 --verbose
 ```

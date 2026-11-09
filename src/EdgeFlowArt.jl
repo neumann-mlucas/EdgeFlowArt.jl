@@ -16,13 +16,13 @@ const Canvas = Matrix{RGB{N0f8}}
 
 Base.@kwdef struct Config
     size::Int = 512
-    steps::Int = 200               # integration steps per particle
+    steps::Int = 200               # integration steps per direction
     points::Int = 3000             # particle count
     eta::Float32 = 1.0f0           # step size (px per step)
     tau::Float32 = 0.15f0          # seeding: edge threshold on Sobel magnitude
     sigma::Float32 = 1.5f0         # Tangent: pre-blur sigma (px)
-    stroke_width::Float64 = 0.6
-    opacity::Float64 = 0.6
+    stroke_width::Float64 = 1.0
+    opacity::Float64 = 0.9
     seed::Int = 42
     formats::Set{Symbol} = Set{Symbol}()
     timer::LogTimer = LogTimer()

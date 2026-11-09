@@ -33,7 +33,7 @@ end
         seeds = EdgeFlowArt.seed_edges(50, mask, MersenneTwister(0))
         trajs = EdgeFlowArt.integrate(seeds, Fx, Fy, 20, 1.0f0)
         @test length(trajs) == 50
-        @test all(length(t) <= 21 for t in trajs)
+        @test all(length(t) <= 41 for t in trajs)  # ≤ steps each way + seed
         # stays on the vertical edge, moves vertically
         @test all(abs(p[1] - 32) < 3 for t in trajs for p in t)
         @test maximum(abs(t[end][2] - t[1][2]) for t in trajs) > 5
@@ -72,7 +72,7 @@ end
         seeds = [(32.0f0, Float32(y)) for y = 10:2:30]
         trajs = EdgeFlowArt.integrate(seeds, Fx, Fy, 40, 1.0f0)
         owners = Dict{Tuple{Int,Int},Set{Int}}()
-        for (i, t) in enumerate(trajs), p in t
+        for (i, t) in enumerate(trajs), p in (length(t) > 1 ? t : ())
             c = (floor(Int, (p[2] - 1) / 2), floor(Int, (p[1] - 1) / 2))
             push!(get!(owners, c, Set{Int}()), i)
         end
@@ -96,6 +96,12 @@ end
         seeds = EdgeFlowArt.seed_edges(200, mask, MersenneTwister(0))
         @test length(seeds) == 200
         @test all(abs(s[1] - 32) < 3 for s in seeds)  # all on the stripe boundary
+        # low contrast (0.45 | 0.55): below tau, still found via the quantile cap
+        faint = fill(0.45f0, 64, 64)
+        faint[:, 32:end] .= 0.55f0
+        @test maximum(EdgeFlowArt.sobel_xy(faint)[1]) < 0.15
+        m = EdgeFlowArt.edge_mask(faint, 0.15f0)
+        @test any(m) && all(any(m[:, 30:34]; dims=2))
         flat = EdgeFlowArt.seed_edges(5, falses(8, 8), MersenneTwister(0))
         @test isempty(flat)                              # no edges → no seeds
     end

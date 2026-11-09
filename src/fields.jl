@@ -35,10 +35,14 @@ function sobel_xy(gray::Matrix{Float32})
     return Gx, Gy
 end
 
-# Edge pixels: Sobel magnitude above tau (seed sites).
+# Edge pixels (seed sites): Sobel magnitude above min(tau, top-EDGE_TOP
+# quantile), so low-contrast images still get edges while tau caps how much
+# of a high-contrast image counts.
+const EDGE_TOP = 0.10
 function edge_mask(gray::Matrix{Float32}, tau::Float32)::BitMatrix
     Gx, Gy = sobel_xy(gray)
-    return @. sqrt(Gx^2 + Gy^2) > tau
+    E = @. sqrt(Gx^2 + Gy^2)
+    return E .> min(tau, quantile(vec(E), 1 - EDGE_TOP))
 end
 
 # Tangent-flow field: perpendicular to gradient. Particles glide along edges.
