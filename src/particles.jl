@@ -50,6 +50,7 @@ end
 # Occupancy cell size (px). A particle stops on entering a cell another particle
 # already drew through, so strokes don't stack on the same contour (pile-up).
 # Seeds landing in a taken cell never start (1-point trajectory).
+# Strokes are drawn one after another, not in lockstep.
 # ponytail: fixed-grid first-come ownership, Jobard–Lefer distance test if
 # grid-aligned gaps show.
 const SPACING = 2.0f0
@@ -67,32 +68,28 @@ function integrate(
     cell(x, y) =
         CartesianIndex(floor(Int, (y - 1) / SPACING) + 1, floor(Int, (x - 1) / SPACING) + 1)
     trajs = [Point2[s] for s in seeds]
-    alive = trues(n)
-    prev = zeros(Float32, n, 2)
-    for i = 1:n
-        c = cell(seeds[i]...)
-        owner[c] == 0 ? (owner[c] = i) : (alive[i] = false)
-    end
-    @inbounds for _ = 1:steps
-        for i = 1:n
-            alive[i] || continue
-            x, y = trajs[i][end]
+    # one full stroke at a time (seed order = random): first strokes run long,
+    # later ones fill the gaps; a seed in a taken cell is skipped.
+    @inbounds for i = 1:n
+        x, y = seeds[i]
+        c = cell(x, y)
+        owner[c] == 0 || continue
+        owner[c] = i
+        px, py = 0.0f0, 0.0f0
+        for _ = 1:steps
             vx, vy = sample_field(Fx, Fy, x, y)
-            if vx * prev[i, 1] + vy * prev[i, 2] < 0.0f0
+            if vx * px + vy * py < 0.0f0
                 vx = -vx
                 vy = -vy
             end
             xn = clamp(x + eta * vx, 1.0f0, Float32(w))
             yn = clamp(y + eta * vy, 1.0f0, Float32(h))
             c = cell(xn, yn)
-            if owner[c] != 0 && owner[c] != i
-                alive[i] = false
-                continue
-            end
+            owner[c] == 0 || owner[c] == i || break
             owner[c] = i
-            prev[i, 1] = xn - x
-            prev[i, 2] = yn - y
-            push!(trajs[i], (xn, yn))
+            px, py = xn - x, yn - y
+            x, y = xn, yn
+            push!(trajs[i], (x, y))
         end
     end
     return trajs
