@@ -1,20 +1,29 @@
 # Image-derived vector fields for particle advection.
-# All fields return (Fx, Fy) matrices of size (H, W), Float32, unit-length
-# (zero where the field is degenerate).
+# All fields return (Fx, Fy) matrices of size (H, W), Float32, length ≤ 1
+# (dt: unit; sobel/tangent: scaled by gradient strength; zero where degenerate).
 
 using ImageFiltering
 using ImageMorphology
 using Images: Gray
+using Statistics: quantile
 
 to_gray(img::AbstractMatrix)::Matrix{Float32} = Float32.(Gray.(img))
 
-# Normalize per-pixel to unit length in-place. Zeros stay zero.
-function normalize_field!(Fx::Matrix{Float32}, Fy::Matrix{Float32})
+# Normalize per-pixel in-place. Zeros stay zero.
+# soft=false: unit length everywhere (dt: |∇D| ≈ 1 already, direction is all
+#   that matters).
+# soft=true: F / (|F| + ε), ε = SOFT_EPS_Q99 × 99th-pct magnitude. Strong
+#   edges move at ≥ ~0.67 px/step, flat regions (noise-level gradient) barely
+#   move instead of amplifying noise into full-speed scribbles.
+const SOFT_EPS_Q99 = 0.5f0
+function normalize_field!(Fx::Matrix{Float32}, Fy::Matrix{Float32}; soft::Bool=false)
+    M = @. sqrt(Fx^2 + Fy^2)
+    eps = soft ? SOFT_EPS_Q99 * quantile(vec(M), 0.99) : 0.0f0
     @inbounds for i in eachindex(Fx)
-        m = sqrt(Fx[i]^2 + Fy[i]^2)
+        m = M[i]
         if m > 1.0f-6
-            Fx[i] /= m
-            Fy[i] /= m
+            Fx[i] /= (m + eps)
+            Fy[i] /= (m + eps)
         else
             Fx[i] = 0.0f0
             Fy[i] = 0.0f0
@@ -36,7 +45,7 @@ function field_sobel(gray::Matrix{Float32})
     Gx, Gy = sobel_xy(gray)
     E = @. sqrt(Gx^2 + Gy^2)
     Ex, Ey = sobel_xy(E)
-    normalize_field!(Ex, Ey)
+    normalize_field!(Ex, Ey; soft=true)
     return Ex, Ey
 end
 
@@ -70,7 +79,7 @@ function field_tangent(gray::Matrix{Float32}, sigma::Float32)
     # Tangent = 90° rotation of gradient
     Fx = -Gy
     Fy = Gx
-    normalize_field!(Fx, Fy)
+    normalize_field!(Fx, Fy; soft=true)
     return Fx, Fy
 end
 

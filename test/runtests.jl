@@ -68,6 +68,25 @@ end
         @test isempty(gif)
     end
 
+    @testset "soft-normalized field: fast on edges, slow on noise" begin
+        Random.seed!(1)
+        img = striped(64)
+        noisy = [
+            RGB{N0f8}(clamp(Float32(Gray(c)) + 0.02f0 * randn(Float32), 0, 1)) for c in img
+        ]
+        gray = EdgeFlowArt.to_gray(noisy)
+        Fx, Fy = EdgeFlowArt.field_tangent(gray, 1.0f0)
+        mag = hypot.(Fx, Fy)
+        @test maximum(mag) <= 1.0f0
+        edge = mean(mag[8:56, 31:33])        # around the stripe boundary
+        flat = mean(mag[8:56, 6:20])          # noise-only region
+        @test edge > 0.4
+        @test flat < 0.25 * edge
+        # dt stays unit length off-edge (direction field)
+        Dx, Dy = EdgeFlowArt.field_dt(gray, 0.15f0)
+        @test mean(hypot.(Dx, Dy)[8:56, 6:20]) > 0.9
+    end
+
     @testset "static paths dropped" begin
         # flat image → zero field → no particle moves → nothing drawn
         cfg = EdgeFlowArt.Config(
