@@ -35,6 +35,13 @@ end
         @test sum(abs.(Fy[8:56, 32])) > 10 * sum(abs.(Fx[8:56, 32]))
     end
 
+    @testset "orientation sampling ignores sign flips" begin
+        Fx = zeros(Float32, 8, 8)
+        Fy = Float32[isodd(i + j) ? 1 : -1 for i = 1:8, j = 1:8]  # ±vertical checkerboard
+        vx, vy = EdgeFlowArt.sample_field(Fx, Fy, 4.5f0, 4.5f0, 0.0f0, 1.0f0)
+        @test vy ≈ 1.0f0 && vx == 0.0f0
+    end
+
     @testset "particles glide along the edge" begin
         gray = EdgeFlowArt.to_gray(striped(64))
         Fx, Fy = EdgeFlowArt.field_tangent(gray, 1.0f0)

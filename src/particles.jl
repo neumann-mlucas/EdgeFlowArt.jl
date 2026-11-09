@@ -5,28 +5,41 @@ using Random
 
 const Point2 = Tuple{Float32,Float32}
 
-# Bilinear sample of Fx, Fy at fractional (x, y). Clamps to interior.
+# Bilinear sample of an orientation field at fractional (x, y). Clamps to
+# interior. The field's sign is arbitrary (v and -v are the same direction),
+# so each corner is flipped to agree with the reference (rx, ry) before
+# blending; otherwise neighbours with opposite signs cancel to garbage.
+# Zero reference → the top-left corner is the reference.
 @inline function sample_field(
     Fx::Matrix{Float32},
     Fy::Matrix{Float32},
     x::Float32,
     y::Float32,
+    rx::Float32=0.0f0,
+    ry::Float32=0.0f0,
 )
     h, w = size(Fx)
     xc = clamp(x, 1.0f0, Float32(w) - 1.0f-3)
     yc = clamp(y, 1.0f0, Float32(h) - 1.0f-3)
     x0 = floor(Int, xc)
-    x1 = x0 + 1
     y0 = floor(Int, yc)
-    y1 = y0 + 1
     fx = xc - x0
     fy = yc - y0
-    a = (1 - fx) * (1 - fy)
-    b = fx * (1 - fy)
-    c = (1 - fx) * fy
-    d = fx * fy
-    @inbounds vx = a * Fx[y0, x0] + b * Fx[y0, x1] + c * Fx[y1, x0] + d * Fx[y1, x1]
-    @inbounds vy = a * Fy[y0, x0] + b * Fy[y0, x1] + c * Fy[y1, x0] + d * Fy[y1, x1]
+    if rx == 0.0f0 && ry == 0.0f0
+        @inbounds rx, ry = Fx[y0, x0], Fy[y0, x0]
+    end
+    vx = vy = 0.0f0
+    @inbounds for (dy, dx, wt) in (
+        (0, 0, (1 - fx) * (1 - fy)),
+        (0, 1, fx * (1 - fy)),
+        (1, 0, (1 - fx) * fy),
+        (1, 1, fx * fy),
+    )
+        cx, cy = Fx[y0+dy, x0+dx], Fy[y0+dy, x0+dx]
+        s = cx * rx + cy * ry < 0.0f0 ? -wt : wt
+        vx += s * cx
+        vy += s * cy
+    end
     return vx, vy
 end
 
@@ -72,7 +85,7 @@ function integrate(
     function trace(x, y, px, py, i)
         pts = Point2[]
         for _ = 1:steps
-            vx, vy = sample_field(Fx, Fy, x, y)
+            vx, vy = sample_field(Fx, Fy, x, y, px, py)
             if vx * px + vy * py < 0.0f0
                 vx = -vx
                 vy = -vy
