@@ -87,6 +87,16 @@ end
         @test mean(hypot.(Dx, Dy)[8:56, 6:20]) > 0.9
     end
 
+    @testset "path color = mean along trajectory" begin
+        img = striped(64)  # white cols < 32, black cols ≥ 32
+        on_white = [(Float32(x), 10.0f0) for x = 5:15]
+        @test EdgeFlowArt.path_color(img, on_white) == RGB{N0f8}(1, 1, 1)
+        # starts on white, ends on black: half/half → mid gray, not start color
+        across = [(Float32(x), 10.0f0) for x = 22:41]
+        c = EdgeFlowArt.path_color(img, across)
+        @test 0.4 < Float32(c.r) < 0.6
+    end
+
     @testset "static paths dropped" begin
         # flat image → zero field → no particle moves → nothing drawn
         cfg = EdgeFlowArt.Config(

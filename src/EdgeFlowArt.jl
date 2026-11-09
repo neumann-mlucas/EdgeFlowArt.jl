@@ -62,10 +62,10 @@ function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{
     # paths that never left their pixel render as dots: noise, not strokes
     moved = extent.(trajs) .>= MIN_EXTENT
     @info ts() * "Dropping $(count(!, moved)) static paths"
-    trajs, seeds = trajs[moved], seeds[moved]
+    trajs = trajs[moved]
 
     @info ts() * "Sampling colors"
-    colors = [sample_color(input, s[1], s[2]) for s in seeds]
+    colors = [path_color(input, t) for t in trajs]
 
     png = if want_png
         @info ts() * "Rasterizing PNG"

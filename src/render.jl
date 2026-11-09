@@ -1,11 +1,14 @@
 # Rendering: SVG polylines + naive PNG line rasterization.
 
-# Sample source color at trajectory start (rounded to pixel).
-function sample_color(img::AbstractMatrix, x::Float32, y::Float32)::RGB{N0f8}
+# Stroke color = mean source color along the trajectory (rounded pixels).
+# Start-pixel color mislabels paths that travel (dt: flat background → edge).
+function path_color(img::AbstractMatrix, traj::Vector{Point2})::RGB{N0f8}
     h, w = size(img)
-    xi = clamp(round(Int, x), 1, w)
-    yi = clamp(round(Int, y), 1, h)
-    return RGB{N0f8}(img[yi, xi])
+    acc = RGB{Float32}(0, 0, 0)
+    for (x, y) in traj
+        acc += RGB{Float32}(img[clamp(round(Int, y), 1, h), clamp(round(Int, x), 1, w)])
+    end
+    return RGB{N0f8}(acc / length(traj))
 end
 
 # Build SVG document from trajectories.
