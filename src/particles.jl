@@ -42,6 +42,10 @@ end
 # align_tangent: for tangent field the 180° ambiguity would fold curves back on
 # themselves; align each step with the previous displacement to keep advection
 # monotone along the streamline.
+# stop_on_reversal: for dt/sobel the field points *at* an edge/ridge from both
+# sides, so a particle that reaches it oscillates across it forever (zigzag +
+# pile-up). Freeze it the first step its direction flips (> 90°).
+# Trailing points that no longer move are trimmed from every trajectory.
 function integrate(
     seeds::Vector{Point2},
     Fx::Matrix{Float32},
@@ -49,19 +53,31 @@ function integrate(
     steps::Int,
     eta::Float32;
     align_tangent::Bool=false,
+    stop_on_reversal::Bool=false,
 )::Vector{Vector{Point2}}
     h, w = size(Fx)
     n = length(seeds)
     trajs = [Vector{Point2}(undef, steps + 1) for _ = 1:n]
     prev = zeros(Float32, n, 2)
+    stopped = falses(n)
     for i = 1:n
         trajs[i][1] = seeds[i]
     end
     @inbounds for k = 1:steps
         for i = 1:n
             x, y = trajs[i][k]
+            if stopped[i]
+                trajs[i][k+1] = (x, y)
+                continue
+            end
             vx, vy = sample_field(Fx, Fy, x, y)
-            if align_tangent && (prev[i, 1] != 0.0f0 || prev[i, 2] != 0.0f0)
+            has_prev = prev[i, 1] != 0.0f0 || prev[i, 2] != 0.0f0
+            if stop_on_reversal && has_prev && vx * prev[i, 1] + vy * prev[i, 2] < 0.0f0
+                stopped[i] = true
+                trajs[i][k+1] = (x, y)
+                continue
+            end
+            if align_tangent && has_prev
                 if vx * prev[i, 1] + vy * prev[i, 2] < 0.0f0
                     vx = -vx
                     vy = -vy
@@ -74,7 +90,18 @@ function integrate(
             trajs[i][k+1] = (xn, yn)
         end
     end
+    foreach(trim_static_tail!, trajs)
     return trajs
+end
+
+# Drop trailing points within 1e-3 px of their predecessor (keeps ≥ 1 point).
+function trim_static_tail!(traj::Vector{Point2})
+    while length(traj) > 1 &&
+          abs(traj[end][1] - traj[end-1][1]) < 1.0f-3 &&
+          abs(traj[end][2] - traj[end-1][2]) < 1.0f-3
+        pop!(traj)
+    end
+    traj
 end
 
 # Paths whose bbox is smaller than this (px) are dropped as static dots.

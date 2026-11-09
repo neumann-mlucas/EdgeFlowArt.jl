@@ -57,7 +57,16 @@ function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{
 
     @info ts() * "Integrating $(cfg.steps) steps"
     align = cfg.field === :tangent
-    trajs = integrate(seeds, Fx, Fy, cfg.steps, cfg.eta; align_tangent=align)
+    stop = cfg.field in (:dt, :sobel)
+    trajs = integrate(
+        seeds,
+        Fx,
+        Fy,
+        cfg.steps,
+        cfg.eta;
+        align_tangent=align,
+        stop_on_reversal=stop,
+    )
 
     # paths that never left their pixel render as dots: noise, not strokes
     moved = extent.(trajs) .>= MIN_EXTENT

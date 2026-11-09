@@ -44,7 +44,7 @@ end
         seeds = EdgeFlowArt.seed_uniform(50, 64, 64, rng)
         trajs = EdgeFlowArt.integrate(seeds, Fx, Fy, 20, 1.0f0)
         @test length(trajs) == 50
-        @test all(length(t) == 21 for t in trajs)
+        @test all(1 <= length(t) <= 21 for t in trajs)  # static tails trimmed
         # Particles should end closer (on avg) to the vertical edge column.
         edge_col = div(64, 2)
         d_start = mean(abs(t[1][1] - edge_col) for t in trajs)
@@ -85,6 +85,26 @@ end
         # dt stays unit length off-edge (direction field)
         Dx, Dy = EdgeFlowArt.field_dt(gray, 0.15f0)
         @test mean(hypot.(Dx, Dy)[8:56, 6:20]) > 0.9
+    end
+
+    @testset "dt: stop on reversal, no zigzag across the edge" begin
+        gray = EdgeFlowArt.to_gray(striped(64))
+        Fx, Fy = EdgeFlowArt.field_dt(gray, 0.15f0)
+        seeds = EdgeFlowArt.seed_uniform(100, 64, 64, MersenneTwister(0))
+        reversals(t) = count(
+            k ->
+                (t[k][1] - t[k-1][1]) * (t[k+1][1] - t[k][1]) +
+                (t[k][2] - t[k-1][2]) * (t[k+1][2] - t[k][2]) < 0,
+            2:(length(t)-1),
+        )
+        free = EdgeFlowArt.integrate(seeds, Fx, Fy, 60, 1.0f0)
+        held = EdgeFlowArt.integrate(seeds, Fx, Fy, 60, 1.0f0; stop_on_reversal=true)
+        @test sum(reversals, free) > 100           # baseline oscillates
+        @test sum(reversals, held) == 0
+        # stopped particles still end near the edge column
+        @test mean(abs(t[end][1] - 32) for t in held) < 3
+        # trimmed: no trailing duplicate points
+        @test all(length(t) == 1 || t[end] != t[end-1] for t in held)
     end
 
     @testset "path color = mean along trajectory" begin
