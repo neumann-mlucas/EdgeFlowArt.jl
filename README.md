@@ -1,23 +1,30 @@
 # EdgeFlowArt.jl
 
-Image → many strokes that trace the image's edges. N particles are seeded on
-edge pixels (Sobel magnitude > `--tau`), then advected step-by-step along the
-tangent field of the source image. Each particle's
-trajectory becomes one stroke in the output. SVG-first; PNG is a Bresenham
-preview.
+Image → strokes that trace the image's edges. Particles are seeded on edge
+pixels, then traced both ways along the image's tangent field until they run
+into another stroke. Each trajectory becomes one stroke. SVG-first; PNG is an
+anti-aliased preview; GIF shows the strokes appearing in drawing order.
 
 Same vein as StringArt.jl / MonteCarloArt.jl / PrimitiveArt.md / StippleArt.md /
 TriMosaic.md: constructive approximation via constrained primitive placement.
 The primitive here is a short polyline, and the constraint is the flow field.
 
-## Field
+## Algorithm
 
-Tangent flow $F = (-I_y, I_x)$ (perpendicular to the gradient of the blurred
-image), soft-normalized $F/(|F|+\varepsilon)$ so strong edges move fast and
-noise barely moves. Integration flips sign per step against the previous
-displacement so the 180° ambiguity doesn't fold curves back on themselves.
-Stroke color is the mean source color along the path; paths that never leave
-their pixel are dropped.
+- **Field**: tangent of the smoothed structure tensor $J = G_\sigma * (\nabla I \nabla I^T)$
+  (minor eigenvector), magnitude $\sqrt{\lambda_1-\lambda_2}$ (coherence), soft-normalized
+  $F/(|F|+\varepsilon)$ so strong coherent edges move fast and noise barely moves.
+  Smoothing $J$ instead of $I$ keeps thin lines and gives long flowing strokes on
+  texture (fur, swirls).
+- **Orientation, not vector**: $F$ and $-F$ are the same direction. Bilinear sampling
+  flips each corner to agree with the stroke's heading before blending, and each step
+  is aligned with the previous one.
+- **Seeds**: random pixels with Sobel magnitude above $\min(\tau,\ \text{top-10\% quantile})$,
+  so low-contrast images still get edges.
+- **Spacing**: 2 px occupancy grid. Strokes are traced one at a time (random order), each
+  both ways from its seed, and stop on entering a cell another stroke owns. Seeds in a
+  taken cell are skipped. No pile-up; `--points` is an upper bound.
+- **Color**: mean source color along the stroke.
 
 Gradient-descent fields (`sobel` = climb $|\nabla I|$, `dt` = descend edge
 distance) were removed: their strokes end on the edge, so they draw short
@@ -36,7 +43,7 @@ CLI knobs:
 
 ```
 --input INPUT
---output OUTPUT             .png / .svg (comma-separate for both; .gif errors)
+--output OUTPUT             .png / .svg / .gif (comma-separate for several)
 --size S                    default 512
 --points N                  default 3000
 --steps K                   default 200            steps per direction from seed
@@ -77,7 +84,7 @@ EdgeFlowArt.jl/
 │   ├── EdgeFlowArt.jl       # module: Config + render()
 │   ├── fields.jl            # tangent field + edge mask
 │   ├── particles.jl         # edge seeding, bilinear sample, integration
-│   ├── render.jl            # SVG polylines + Bresenham PNG
+│   ├── render.jl            # SVG polylines + anti-aliased PNG / GIF
 │   └── common.jl            # vendored from ArtScaffold.jl
 ├── test/
 ├── dev/
@@ -88,14 +95,9 @@ EdgeFlowArt.jl/
 
 ## Deferred
 
-Small on purpose. Room to grow (only GIF, Wu anti-aliasing and the
-structure tensor carry `ponytail:` markers in code; the rest are ideas):
+Ideas, not planned:
 
-- **Repulsion** between nearby particles → Poisson-disk on edges (kills bunching on strong ridges). Add with a spatial hash grid.
-- **Structure-tensor eigendecomp** for tangent field (with coherence weighting). Current tangent is `⊥∇I` — good enough for portraits, upgrade if noisy on textured images.
-- **Coarse-to-fine sigma decay**: blur the field early, sharpen late. Gets particles seeded in flat regions to migrate toward the subject before pinning.
+- **Fill / hatching**: seed new strokes at a fixed offset beside existing ones (Jobard–Lefer) to shade flat regions.
 - **Harris-weighted seeding**: seed density ∝ corner response, concentrate budget on features.
 - **Perlin blend**: `F_blend = (1-w)·F_Perlin + w·F_tangent` for Fidenza-style curves.
 - **Palette lock** + variable stroke width. Reuse `kmeans_palette_lab` from `common.jl`.
-- **GIF of the descent** (checkpoint trajectories per K frames). `-o *.gif` currently errors.
-- **Anti-aliased PNG** (Xiaolin Wu) — PNG preview is plain Bresenham.
