@@ -1,8 +1,8 @@
 # EdgeFlowArt.jl
 
-Image → many small strokes that follow (or drift toward) the image's edges.
-N particles are seeded uniformly across the canvas, then advected step-by-step
-through a vector field derived from the source image. Each particle's
+Image → many strokes that trace the image's edges. N particles are seeded on
+edge pixels (Sobel magnitude > `--tau`), then advected step-by-step along the
+tangent field of the source image. Each particle's
 trajectory becomes one stroke in the output. SVG-first; PNG is a Bresenham
 preview.
 
@@ -10,18 +10,18 @@ Same vein as StringArt.jl / MonteCarloArt.jl / PrimitiveArt.md / StippleArt.md /
 TriMosaic.md: constructive approximation via constrained primitive placement.
 The primitive here is a short polyline, and the constraint is the flow field.
 
-## Fields
+## Field
 
-Pick one via `--field <mode>`:
+Tangent flow $F = (-I_y, I_x)$ (perpendicular to the gradient of the blurred
+image), soft-normalized $F/(|F|+\varepsilon)$ so strong edges move fast and
+noise barely moves. Integration flips sign per step against the previous
+displacement so the 180° ambiguity doesn't fold curves back on themselves.
+Stroke color is the mean source color along the path; paths that never leave
+their pixel are dropped.
 
-| Mode      | Definition                                       | Look                                          |
-|-----------|--------------------------------------------------|-----------------------------------------------|
-| `sobel`   | $F = \nabla \| \nabla I \|$ (climb edge ridge)   | Points on edges lock in; flat regions stay put — visible jitter off subject. Sketchy. |
-| `dt`      | $F = -\nabla D$, $D$ = distance to thresholded edge | Every particle pulled to nearest edge. Clean outline, no background jitter. |
-| `tangent` | $F = (-I_y, I_x)$ (perpendicular to gradient)    | Particles glide *along* edges, tracing continuous curves. Painterly. |
-
-For `tangent`, integration flips sign per step against previous displacement
-so the 180° tangent ambiguity doesn't fold curves back on themselves.
+Gradient-descent fields (`sobel` = climb $|\nabla I|$, `dt` = descend edge
+distance) were removed: their strokes end on the edge, so they draw short
+dots / rays perpendicular to it instead of contours.
 
 ## Quick start
 
@@ -29,7 +29,7 @@ so the 180° tangent ambiguity doesn't fold curves back on themselves.
 cd EdgeFlowArt.jl
 just install
 just test
-julia --project=. -O3 -t 8 main.jl -i input.jpg -o out.svg --field tangent --points 5000 --steps 300
+julia --project=. -O3 -t 8 main.jl -i input.jpg -o out.svg --points 5000 --steps 300
 ```
 
 CLI knobs:
@@ -38,11 +38,10 @@ CLI knobs:
 --input INPUT
 --output OUTPUT             .png / .svg (comma-separate for both; .gif errors)
 --size S                    default 512
---field MODE                sobel | dt | tangent   default tangent
 --points N                  default 3000
 --steps K                   default 200            per-particle integration steps
 --eta E                     default 1.0            step size (px per step)
---tau T                     default 0.15           DT: edge threshold
+--tau T                     default 0.15           seeding: edge threshold
 --sigma S                   default 1.5            tangent: pre-blur sigma
 --stroke-width W            default 0.6
 --opacity A                 default 0.6
@@ -60,8 +59,8 @@ just check   # JET lint + tests + shellcheck
 Quality sweep (fixtures in `test/fixtures/`, not versioned):
 
 ```bash
-PHASE=baseline ./test/scripts/baseline.sh            # fixtures × {tangent, dt, sobel}
-julia --project=. test/scripts/metrics.jl baseline p1 # → test/results/metrics.csv + sheet_<field>.png
+PHASE=baseline ./test/scripts/baseline.sh            # fixtures, tangent
+julia --project=. test/scripts/metrics.jl baseline p1 # → test/results/metrics.csv + sheet_tangent.png
 ```
 
 Metrics (from the SVG polylines vs the source): `edge_prec`/`edge_rec`
@@ -76,8 +75,8 @@ EdgeFlowArt.jl/
 ├── main.jl                  # CLI
 ├── src/
 │   ├── EdgeFlowArt.jl       # module: Config + render()
-│   ├── fields.jl            # sobel / dt / tangent field construction
-│   ├── particles.jl         # bilinear sample + integration
+│   ├── fields.jl            # tangent field + edge mask
+│   ├── particles.jl         # edge seeding, bilinear sample, integration
 │   ├── render.jl            # SVG polylines + Bresenham PNG
 │   └── common.jl            # vendored from ArtScaffold.jl
 ├── test/

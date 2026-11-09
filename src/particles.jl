@@ -30,19 +30,11 @@ const Point2 = Tuple{Float32,Float32}
     return vx, vy
 end
 
-# Uniform random seeds in [1, W] × [1, H].
-function seed_uniform(n::Int, w::Int, h::Int, rng::AbstractRNG)::Vector{Point2}
-    [
-        (rand(rng, Float32) * (w - 1) + 1.0f0, rand(rng, Float32) * (h - 1) + 1.0f0) for
-        _ = 1:n
-    ]
-end
-
-# Seeds on random edge pixels (± 0.5 px jitter); uniform if there are none.
+# Seeds on random edge pixels (± 0.5 px jitter); none if there are no edges.
 function seed_edges(n::Int, mask::BitMatrix, rng::AbstractRNG)::Vector{Point2}
     h, w = size(mask)
     idx = findall(mask)
-    isempty(idx) && return seed_uniform(n, w, h, rng)
+    isempty(idx) && return Point2[]
     map(rand(rng, idx, n)) do c
         (
             clamp(c[2] + rand(rng, Float32) - 0.5f0, 1.0f0, Float32(w)),
@@ -51,50 +43,31 @@ function seed_edges(n::Int, mask::BitMatrix, rng::AbstractRNG)::Vector{Point2}
     end
 end
 
-# Integrate n particles for K steps. Returns Vector of trajectories.
-# align_tangent: for tangent field the 180° ambiguity would fold curves back on
-# themselves; align each step with the previous displacement to keep advection
-# monotone along the streamline.
-# stop_on_reversal: for dt/sobel the field points *at* an edge/ridge from both
-# sides, so a particle that reaches it oscillates across it forever (zigzag +
-# pile-up). Freeze it the first step its direction flips (> 90°).
-# Trailing points that no longer move are trimmed from every trajectory.
+# Integrate n particles for K steps through the tangent field. Returns Vector
+# of trajectories. The field has a 180° ambiguity that would fold curves back on
+# themselves, so each step is aligned with the previous displacement to keep
+# advection monotone along the streamline.
 function integrate(
     seeds::Vector{Point2},
     Fx::Matrix{Float32},
     Fy::Matrix{Float32},
     steps::Int,
-    eta::Float32;
-    align_tangent::Bool=false,
-    stop_on_reversal::Bool=false,
+    eta::Float32,
 )::Vector{Vector{Point2}}
     h, w = size(Fx)
     n = length(seeds)
     trajs = [Vector{Point2}(undef, steps + 1) for _ = 1:n]
     prev = zeros(Float32, n, 2)
-    stopped = falses(n)
     for i = 1:n
         trajs[i][1] = seeds[i]
     end
     @inbounds for k = 1:steps
         for i = 1:n
             x, y = trajs[i][k]
-            if stopped[i]
-                trajs[i][k+1] = (x, y)
-                continue
-            end
             vx, vy = sample_field(Fx, Fy, x, y)
-            has_prev = prev[i, 1] != 0.0f0 || prev[i, 2] != 0.0f0
-            if stop_on_reversal && has_prev && vx * prev[i, 1] + vy * prev[i, 2] < 0.0f0
-                stopped[i] = true
-                trajs[i][k+1] = (x, y)
-                continue
-            end
-            if align_tangent && has_prev
-                if vx * prev[i, 1] + vy * prev[i, 2] < 0.0f0
-                    vx = -vx
-                    vy = -vy
-                end
+            if vx * prev[i, 1] + vy * prev[i, 2] < 0.0f0
+                vx = -vx
+                vy = -vy
             end
             xn = clamp(x + eta * vx, 1.0f0, Float32(w))
             yn = clamp(y + eta * vy, 1.0f0, Float32(h))
@@ -103,25 +76,5 @@ function integrate(
             trajs[i][k+1] = (xn, yn)
         end
     end
-    foreach(trim_static_tail!, trajs)
     return trajs
-end
-
-# Drop trailing points within 1e-3 px of their predecessor (keeps ≥ 1 point).
-function trim_static_tail!(traj::Vector{Point2})
-    while length(traj) > 1 &&
-          abs(traj[end][1] - traj[end-1][1]) < 1.0f-3 &&
-          abs(traj[end][2] - traj[end-1][2]) < 1.0f-3
-        pop!(traj)
-    end
-    traj
-end
-
-# Paths whose bbox is smaller than this (px) are dropped as static dots.
-const MIN_EXTENT = 1.0f0
-
-# Larger bbox side of a trajectory (px).
-function extent(traj::Vector{Point2})::Float32
-    xs, ys = first.(traj), last.(traj)
-    max(maximum(xs) - minimum(xs), maximum(ys) - minimum(ys))
 end

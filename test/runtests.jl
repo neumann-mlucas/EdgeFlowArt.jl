@@ -19,16 +19,6 @@ end
         img = striped(64)
         gray = EdgeFlowArt.to_gray(img)
 
-        Fx, Fy = EdgeFlowArt.field_sobel(gray)
-        @test size(Fx) == (64, 64) && size(Fy) == (64, 64)
-        # Field on/near the vertical edge column is non-zero somewhere.
-        @test any(abs.(Fx[:, div(64, 2)]) .> 0)
-
-        Fx, Fy = EdgeFlowArt.field_dt(gray, 0.15f0)
-        @test size(Fx) == (64, 64)
-        # DT is defined everywhere → non-trivial field off-edge.
-        @test any(abs.(Fx) .+ abs.(Fy) .> 0)
-
         Fx, Fy = EdgeFlowArt.field_tangent(gray, 1.0f0)
         @test size(Fx) == (64, 64)
         # Tangent to a vertical edge is vertical → |Fy| dominates |Fx| on that column.
@@ -36,30 +26,21 @@ end
         @test sum(abs.(Fy[:, col])) > sum(abs.(Fx[:, col]))
     end
 
-    @testset "particles" begin
-        img = striped(64)
-        gray = EdgeFlowArt.to_gray(img)
-        Fx, Fy = EdgeFlowArt.field_dt(gray, 0.15f0)
-        rng = MersenneTwister(0)
-        seeds = EdgeFlowArt.seed_uniform(50, 64, 64, rng)
+    @testset "particles glide along the edge" begin
+        gray = EdgeFlowArt.to_gray(striped(64))
+        Fx, Fy = EdgeFlowArt.field_tangent(gray, 1.0f0)
+        mask = EdgeFlowArt.edge_mask(gray, 0.15f0)
+        seeds = EdgeFlowArt.seed_edges(50, mask, MersenneTwister(0))
         trajs = EdgeFlowArt.integrate(seeds, Fx, Fy, 20, 1.0f0)
         @test length(trajs) == 50
-        @test all(1 <= length(t) <= 21 for t in trajs)  # static tails trimmed
-        # Particles should end closer (on avg) to the vertical edge column.
-        edge_col = div(64, 2)
-        d_start = mean(abs(t[1][1] - edge_col) for t in trajs)
-        d_end = mean(abs(t[end][1] - edge_col) for t in trajs)
-        @test d_end <= d_start
+        @test all(length(t) == 21 for t in trajs)
+        # stays on the vertical edge, moves vertically
+        @test all(abs(p[1] - 32) < 3 for t in trajs for p in t)
+        @test mean(abs(t[end][2] - t[1][2]) for t in trajs) > 5
     end
 
     @testset "render pipeline" begin
-        cfg = EdgeFlowArt.Config(
-            size=64,
-            steps=10,
-            points=20,
-            field=:tangent,
-            formats=Set([:svg, :png]),
-        )
+        cfg = EdgeFlowArt.Config(size=64, steps=10, points=20, formats=Set([:svg, :png]))
         img = striped(64)
         png, svg, gif = EdgeFlowArt.render(img, cfg)
         @test size(png) == (64, 64)
@@ -82,29 +63,6 @@ end
         flat = mean(mag[8:56, 6:20])          # noise-only region
         @test edge > 0.4
         @test flat < 0.25 * edge
-        # dt stays unit length off-edge (direction field)
-        Dx, Dy = EdgeFlowArt.field_dt(gray, 0.15f0)
-        @test mean(hypot.(Dx, Dy)[8:56, 6:20]) > 0.9
-    end
-
-    @testset "dt: stop on reversal, no zigzag across the edge" begin
-        gray = EdgeFlowArt.to_gray(striped(64))
-        Fx, Fy = EdgeFlowArt.field_dt(gray, 0.15f0)
-        seeds = EdgeFlowArt.seed_uniform(100, 64, 64, MersenneTwister(0))
-        reversals(t) = count(
-            k ->
-                (t[k][1] - t[k-1][1]) * (t[k+1][1] - t[k][1]) +
-                (t[k][2] - t[k-1][2]) * (t[k+1][2] - t[k][2]) < 0,
-            2:(length(t)-1),
-        )
-        free = EdgeFlowArt.integrate(seeds, Fx, Fy, 60, 1.0f0)
-        held = EdgeFlowArt.integrate(seeds, Fx, Fy, 60, 1.0f0; stop_on_reversal=true)
-        @test sum(reversals, free) > 100           # baseline oscillates
-        @test sum(reversals, held) == 0
-        # stopped particles still end near the edge column
-        @test mean(abs(t[end][1] - 32) for t in held) < 3
-        # trimmed: no trailing duplicate points
-        @test all(length(t) == 1 || t[end] != t[end-1] for t in held)
     end
 
     @testset "path color = mean along trajectory" begin
@@ -124,21 +82,13 @@ end
         @test length(seeds) == 200
         @test all(abs(s[1] - 32) < 3 for s in seeds)  # all on the stripe boundary
         flat = EdgeFlowArt.seed_edges(5, falses(8, 8), MersenneTwister(0))
-        @test length(flat) == 5                          # no edges → uniform fallback
+        @test isempty(flat)                              # no edges → no seeds
     end
 
-    @testset "static paths dropped" begin
-        # flat image → zero field → no particle moves → nothing drawn
-        cfg = EdgeFlowArt.Config(
-            size=32,
-            steps=10,
-            points=20,
-            field=:sobel,
-            formats=Set([:svg]),
-        )
+    @testset "flat image draws nothing" begin
+        # no edges → no seeds → empty canvas
+        cfg = EdgeFlowArt.Config(size=32, steps=10, points=20, formats=Set([:svg]))
         _, svg, _ = EdgeFlowArt.render(fill(RGB{N0f8}(0.5, 0.5, 0.5), 32, 32), cfg)
         @test !occursin("<polyline", svg)
-        @test EdgeFlowArt.extent([(1.0f0, 1.0f0), (1.4f0, 1.2f0)]) < EdgeFlowArt.MIN_EXTENT
-        @test EdgeFlowArt.extent([(1.0f0, 1.0f0), (3.0f0, 1.0f0)]) == 2.0f0
     end
 end

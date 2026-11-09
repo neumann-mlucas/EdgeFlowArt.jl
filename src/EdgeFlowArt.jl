@@ -19,8 +19,7 @@ Base.@kwdef struct Config
     steps::Int = 200               # integration steps per particle
     points::Int = 3000             # particle count
     eta::Float32 = 1.0f0           # step size (px per step)
-    field::Symbol = :tangent       # :sobel | :dt | :tangent
-    tau::Float32 = 0.15f0          # DT: edge threshold on Sobel magnitude
+    tau::Float32 = 0.15f0          # seeding: edge threshold on Sobel magnitude
     sigma::Float32 = 1.5f0         # Tangent: pre-blur sigma (px)
     stroke_width::Float64 = 0.6
     opacity::Float64 = 0.6
@@ -46,37 +45,17 @@ function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{
     ts = cfg.timer
 
     h, w = size(input)
-    @info ts() * "Building field ($(cfg.field))"
+    @info ts() * "Building tangent field"
     gray = to_gray(input)
-    field_params = (tau=cfg.tau, sigma=cfg.sigma)
-    Fx, Fy = build_field(gray, cfg.field, field_params)
+    Fx, Fy = field_tangent(gray, cfg.sigma)
 
     @info ts() * "Seeding $(cfg.points) particles"
     rng = MersenneTwister(cfg.seed)
-    # tangent: start on edges so every stroke traces a contour, none wasted on flat areas
-    seeds = if cfg.field === :tangent
-        seed_edges(cfg.points, edge_mask(gray, cfg.tau), rng)
-    else
-        seed_uniform(cfg.points, w, h, rng)
-    end
+    # start on edges so every stroke traces a contour, none wasted on flat areas
+    seeds = seed_edges(cfg.points, edge_mask(gray, cfg.tau), rng)
 
     @info ts() * "Integrating $(cfg.steps) steps"
-    align = cfg.field === :tangent
-    stop = cfg.field in (:dt, :sobel)
-    trajs = integrate(
-        seeds,
-        Fx,
-        Fy,
-        cfg.steps,
-        cfg.eta;
-        align_tangent=align,
-        stop_on_reversal=stop,
-    )
-
-    # paths that never left their pixel render as dots: noise, not strokes
-    moved = extent.(trajs) .>= MIN_EXTENT
-    @info ts() * "Dropping $(count(!, moved)) static paths"
-    trajs = trajs[moved]
+    trajs = integrate(seeds, Fx, Fy, cfg.steps, cfg.eta)
 
     @info ts() * "Sampling colors"
     colors = [path_color(input, t) for t in trajs]

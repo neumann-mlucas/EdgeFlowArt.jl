@@ -15,9 +15,6 @@ function main()
     outputs = EdgeFlowArt.resolve_output(args["output"])
     formats = Set(fmt for (_, fmt) in outputs)
 
-    field_sym = Symbol(args["field"])
-    field_sym in (:sobel, :dt, :tangent) ||
-        error("--field must be sobel|dt|tangent (got $(args["field"]))")
     # ponytail: no GIF yet (render returns no frames); fail loud instead of writing nothing
     :gif in formats && error("GIF output not supported yet; use .png or .svg")
 
@@ -26,7 +23,6 @@ function main()
         steps=args["steps"],
         points=args["points"],
         eta=Float32(args["eta"]),
-        field=field_sym,
         tau=Float32(args["tau"]),
         sigma=Float32(args["sigma"]),
         stroke_width=args["stroke-width"],
@@ -61,7 +57,7 @@ end
 function parse_cmd()
     parser = ArgParseSettings(
         description="EdgeFlowArt - image → flow-line rendering",
-        epilog="Example: julia main.jl -i input.jpg -o out.svg --field tangent --points 5000",
+        epilog="Example: julia main.jl -i input.jpg -o out.svg --points 5000",
     )
     EdgeFlowArt.add_common_args!(parser; steps_default=200)
     @add_arg_table! parser begin
@@ -69,10 +65,6 @@ function parse_cmd()
         help = "output canvas size in pixels"
         arg_type = Int
         default = 512
-        "--field"
-        help = "vector field: sobel (climb |∇I|) | dt (descend edge-distance) | tangent (glide along edges)"
-        arg_type = String
-        default = "tangent"
         "--points"
         help = "particle count"
         arg_type = Int
@@ -82,7 +74,7 @@ function parse_cmd()
         arg_type = Float64
         default = 1.0
         "--tau"
-        help = "DT field: edge-magnitude threshold in [0, 1]"
+        help = "seeding: edge-magnitude threshold (particles start on pixels above it)"
         arg_type = Float64
         default = 0.15
         "--sigma"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Baseline sweep: fixture corpus × field modes. Emits PNG + SVG per run
+# Baseline sweep over the fixture corpus. Emits PNG + SVG per run
 # (metrics.jl reads the SVG polylines). Skips outputs that already exist.
 #
 # Usage:  ./test/scripts/baseline.sh                # full corpus
@@ -16,19 +16,17 @@ PHASE="${PHASE:-baseline}"
 set_out_dir "$PHASE"
 JULIA_OPTS=(-O3 -t "${JULIA_NUM_THREADS:-8}")
 # shellcheck disable=SC2034  # consumed by run_sweep in lib.sh
-CSV_HEADER="phase,image,config,field,size,points,steps,seconds,status,git_sha"
+CSV_HEADER="phase,image,config,size,points,steps,seconds,status,git_sha"
 
-# name|field|size|points|steps
+# name|size|points|steps
 # shellcheck disable=SC2034  # consumed by run_sweep in lib.sh
 CONFIGS=(
-  "tangent|tangent|512|4000|200"
-  "dt|dt|512|4000|200"
-  "sobel|sobel|512|4000|200"
+  "tangent|512|4000|200"
 )
 
 run_config() {
   local cfg="$1" input="$2" out_stem="$3"
-  IFS='|' read -r name field size points steps <<<"$cfg"
+  IFS='|' read -r name size points steps <<<"$cfg"
 
   local stem_short
   stem_short="$(basename "$out_stem")"
@@ -39,11 +37,11 @@ run_config() {
 
   julia_timed "${out_stem}.log" "${JULIA_OPTS[@]}" --project="$PROJECT_DIR" main.jl \
     -i "$input" -o "${out_stem}.png,${out_stem}.svg" \
-    --field "$field" -s "$size" --points "$points" --steps "$steps"
+    -s "$size" --points "$points" --steps "$steps"
 
   local img
   img="$(basename "$input" .png)"
-  echo "${PHASE},${img},${name},${field},${size},${points},${steps},${LAST_SECS},${LAST_STATUS},$(git_sha)" >>"$BENCH_CSV"
+  echo "${PHASE},${img},${name},${size},${points},${steps},${LAST_SECS},${LAST_STATUS},$(git_sha)" >>"$BENCH_CSV"
   echo "  ${LAST_STATUS^^}  ${stem_short}.{png,svg}  ($(fmt_time "$LAST_SECS"))"
 }
 

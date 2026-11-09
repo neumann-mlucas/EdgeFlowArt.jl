@@ -1,24 +1,19 @@
-# Image-derived vector fields for particle advection.
-# All fields return (Fx, Fy) matrices of size (H, W), Float32, length ≤ 1
-# (dt: unit; sobel/tangent: scaled by gradient strength; zero where degenerate).
+# Image-derived tangent field for particle advection + edge mask for seeding.
+# Field is (Fx, Fy), size (H, W), Float32, length < 1 scaled by gradient strength.
 
 using ImageFiltering
-using ImageMorphology
 using Images: Gray
 using Statistics: quantile
 
 to_gray(img::AbstractMatrix)::Matrix{Float32} = Float32.(Gray.(img))
 
-# Normalize per-pixel in-place. Zeros stay zero.
-# soft=false: unit length everywhere (dt: |∇D| ≈ 1 already, direction is all
-#   that matters).
-# soft=true: F / (|F| + ε), ε = SOFT_EPS_Q99 × 99th-pct magnitude. Strong
-#   edges move at ≥ ~0.67 px/step, flat regions (noise-level gradient) barely
-#   move instead of amplifying noise into full-speed scribbles.
+# Soft-normalize in-place: F / (|F| + ε), ε = SOFT_EPS_Q99 × 99th-pct magnitude.
+# Strong edges move at ≥ ~0.67 px/step, flat regions (noise-level gradient)
+# barely move instead of amplifying noise into full-speed scribbles.
 const SOFT_EPS_Q99 = 0.5f0
-function normalize_field!(Fx::Matrix{Float32}, Fy::Matrix{Float32}; soft::Bool=false)
+function normalize_field!(Fx::Matrix{Float32}, Fy::Matrix{Float32})
     M = @. sqrt(Fx^2 + Fy^2)
-    eps = soft ? SOFT_EPS_Q99 * quantile(vec(M), 0.99) : 0.0f0
+    eps = SOFT_EPS_Q99 * quantile(vec(M), 0.99)
     @inbounds for i in eachindex(Fx)
         m = M[i]
         if m > 1.0f-6
@@ -40,38 +35,10 @@ function sobel_xy(gray::Matrix{Float32})
     return Gx, Gy
 end
 
-# Sobel-climb field: F = ∇|∇I|. Points climb edge-magnitude ridge.
-function field_sobel(gray::Matrix{Float32})
-    Gx, Gy = sobel_xy(gray)
-    E = @. sqrt(Gx^2 + Gy^2)
-    Ex, Ey = sobel_xy(E)
-    normalize_field!(Ex, Ey; soft=true)
-    return Ex, Ey
-end
-
-# DT-descent field: threshold Sobel, distance-transform, F = -∇D. Every
-# pixel pulled to nearest edge.
-# Edge pixels: Sobel magnitude above tau.
+# Edge pixels: Sobel magnitude above tau (seed sites).
 function edge_mask(gray::Matrix{Float32}, tau::Float32)::BitMatrix
     Gx, Gy = sobel_xy(gray)
     return @. sqrt(Gx^2 + Gy^2) > tau
-end
-
-function field_dt(gray::Matrix{Float32}, tau::Float32)
-    B = edge_mask(gray, tau)
-    Fx = zeros(Float32, size(gray))
-    Fy = zeros(Float32, size(gray))
-    if !any(B)
-        return Fx, Fy
-    end
-    # feature_transform(B): per pixel, index of nearest edge (true) pixel.
-    ft = feature_transform(B)
-    D = Float32.(distance_transform(ft))
-    Dx, Dy = sobel_xy(D)
-    @. Fx = -Dx
-    @. Fy = -Dy
-    normalize_field!(Fx, Fy)
-    return Fx, Fy
 end
 
 # Tangent-flow field: perpendicular to gradient. Particles glide along edges.
@@ -83,19 +50,6 @@ function field_tangent(gray::Matrix{Float32}, sigma::Float32)
     # Tangent = 90° rotation of gradient
     Fx = -Gy
     Fy = Gx
-    normalize_field!(Fx, Fy; soft=true)
+    normalize_field!(Fx, Fy)
     return Fx, Fy
-end
-
-# Dispatch on mode symbol.
-function build_field(gray::Matrix{Float32}, mode::Symbol, params::NamedTuple)
-    if mode === :sobel
-        return field_sobel(gray)
-    elseif mode === :dt
-        return field_dt(gray, Float32(params.tau))
-    elseif mode === :tangent
-        return field_tangent(gray, Float32(params.sigma))
-    else
-        error("unknown field mode: $mode (expected :sobel, :dt, :tangent)")
-    end
 end

@@ -1,7 +1,7 @@
 # Rendering: SVG polylines + naive PNG line rasterization.
 
 # Stroke color = mean source color along the trajectory (rounded pixels).
-# Start-pixel color mislabels paths that travel (dt: flat background → edge).
+# Start-pixel color mislabels paths that cross color boundaries.
 function path_color(img::AbstractMatrix, traj::Vector{Point2})::RGB{N0f8}
     h, w = size(img)
     acc = RGB{Float32}(0, 0, 0)
