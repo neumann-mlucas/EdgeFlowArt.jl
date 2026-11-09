@@ -6,17 +6,25 @@ using Random
 const Point2 = Tuple{Float32,Float32}
 
 # Bilinear sample of Fx, Fy at fractional (x, y). Clamps to interior.
-@inline function sample_field(Fx::Matrix{Float32}, Fy::Matrix{Float32}, x::Float32, y::Float32)
+@inline function sample_field(
+    Fx::Matrix{Float32},
+    Fy::Matrix{Float32},
+    x::Float32,
+    y::Float32,
+)
     h, w = size(Fx)
-    xc = clamp(x, 1f0, Float32(w) - 1f-3)
-    yc = clamp(y, 1f0, Float32(h) - 1f-3)
-    x0 = floor(Int, xc); x1 = x0 + 1
-    y0 = floor(Int, yc); y1 = y0 + 1
-    fx = xc - x0; fy = yc - y0
+    xc = clamp(x, 1.0f0, Float32(w) - 1.0f-3)
+    yc = clamp(y, 1.0f0, Float32(h) - 1.0f-3)
+    x0 = floor(Int, xc)
+    x1 = x0 + 1
+    y0 = floor(Int, yc)
+    y1 = y0 + 1
+    fx = xc - x0
+    fy = yc - y0
     a = (1 - fx) * (1 - fy)
-    b = fx       * (1 - fy)
+    b = fx * (1 - fy)
     c = (1 - fx) * fy
-    d = fx       * fy
+    d = fx * fy
     @inbounds vx = a * Fx[y0, x0] + b * Fx[y0, x1] + c * Fx[y1, x0] + d * Fx[y1, x1]
     @inbounds vy = a * Fy[y0, x0] + b * Fy[y0, x1] + c * Fy[y1, x0] + d * Fy[y1, x1]
     return vx, vy
@@ -24,7 +32,10 @@ end
 
 # Uniform random seeds in [1, W] × [1, H].
 function seed_uniform(n::Int, w::Int, h::Int, rng::AbstractRNG)::Vector{Point2}
-    [(rand(rng, Float32) * (w - 1) + 1f0, rand(rng, Float32) * (h - 1) + 1f0) for _ in 1:n]
+    [
+        (rand(rng, Float32) * (w - 1) + 1.0f0, rand(rng, Float32) * (h - 1) + 1.0f0) for
+        _ = 1:n
+    ]
 end
 
 # Integrate n particles for K steps. Returns Vector of trajectories.
@@ -37,29 +48,30 @@ function integrate(
     Fy::Matrix{Float32},
     steps::Int,
     eta::Float32;
-    align_tangent::Bool = false,
+    align_tangent::Bool=false,
 )::Vector{Vector{Point2}}
     h, w = size(Fx)
     n = length(seeds)
-    trajs = [Vector{Point2}(undef, steps + 1) for _ in 1:n]
+    trajs = [Vector{Point2}(undef, steps + 1) for _ = 1:n]
     prev = zeros(Float32, n, 2)
-    for i in 1:n
+    for i = 1:n
         trajs[i][1] = seeds[i]
     end
-    @inbounds for k in 1:steps
-        for i in 1:n
+    @inbounds for k = 1:steps
+        for i = 1:n
             x, y = trajs[i][k]
             vx, vy = sample_field(Fx, Fy, x, y)
-            if align_tangent && (prev[i,1] != 0f0 || prev[i,2] != 0f0)
-                if vx * prev[i,1] + vy * prev[i,2] < 0f0
-                    vx = -vx; vy = -vy
+            if align_tangent && (prev[i, 1] != 0.0f0 || prev[i, 2] != 0.0f0)
+                if vx * prev[i, 1] + vy * prev[i, 2] < 0.0f0
+                    vx = -vx
+                    vy = -vy
                 end
             end
-            xn = clamp(x + eta * vx, 1f0, Float32(w))
-            yn = clamp(y + eta * vy, 1f0, Float32(h))
-            prev[i,1] = xn - x
-            prev[i,2] = yn - y
-            trajs[i][k + 1] = (xn, yn)
+            xn = clamp(x + eta * vx, 1.0f0, Float32(w))
+            yn = clamp(y + eta * vy, 1.0f0, Float32(h))
+            prev[i, 1] = xn - x
+            prev[i, 2] = yn - y
+            trajs[i][k+1] = (xn, yn)
         end
     end
     return trajs

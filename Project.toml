@@ -1,6 +1,6 @@
 name = "EdgeFlowArt"
-uuid = "5e7c1b9f-3a2d-4d6e-b8c1-f9a4e7b3d2a1"
-authors = ["your.name@example.com"]
+uuid = "177809b7-6167-4aaa-972e-cf4f534ae240"
+authors = ["neumann.m.lucas@gmail.com"]
 version = "0.1.0"
 
 [deps]

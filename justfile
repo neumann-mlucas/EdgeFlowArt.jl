@@ -24,12 +24,11 @@ lint:
 # Shell-script lint. Requires shellcheck binary.
 shellcheck:
     @command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not installed — apt install shellcheck / pacman -S shellcheck"; exit 1; }
-    shellcheck test/scripts/*.sh
+    shellcheck -x test/scripts/*.sh
 
 # CI checks.
 check: lint test shellcheck
 
 # Purge generated + resolved state.
 clean:
-    rm -f Manifest.toml dev/Manifest.toml
     rm -rf test/results test/artifacts

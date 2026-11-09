@@ -48,7 +48,7 @@ function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{
     h, w = size(input)
     @info ts() * "Building field ($(cfg.field))"
     gray = to_gray(input)
-    field_params = (tau = cfg.tau, sigma = cfg.sigma)
+    field_params = (tau=cfg.tau, sigma=cfg.sigma)
     Fx, Fy = build_field(gray, cfg.field, field_params)
 
     @info ts() * "Seeding $(cfg.points) particles"
@@ -57,22 +57,28 @@ function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{
 
     @info ts() * "Integrating $(cfg.steps) steps"
     align = cfg.field === :tangent
-    trajs = integrate(seeds, Fx, Fy, cfg.steps, cfg.eta; align_tangent = align)
+    trajs = integrate(seeds, Fx, Fy, cfg.steps, cfg.eta; align_tangent=align)
 
     @info ts() * "Sampling colors"
     colors = [sample_color(input, s[1], s[2]) for s in seeds]
 
     png = if want_png
         @info ts() * "Rasterizing PNG"
-        raster_polylines(trajs, colors, w, h; opacity = Float32(cfg.opacity))
+        raster_polylines(trajs, colors, w, h; opacity=Float32(cfg.opacity))
     else
         fill(RGB{N0f8}(1, 1, 1), h, w)
     end
 
     svg = if want_svg
         @info ts() * "Building SVG"
-        svg_polylines(trajs, colors, w, h;
-                      stroke_width = cfg.stroke_width, opacity = cfg.opacity)
+        svg_polylines(
+            trajs,
+            colors,
+            w,
+            h;
+            stroke_width=cfg.stroke_width,
+            opacity=cfg.opacity,
+        )
     else
         ""
     end
@@ -86,7 +92,7 @@ end
 
 function save_gif(path::AbstractString, frames::Vector{Canvas})
     isempty(frames) && return
-    save(path, stack(frames; dims = 3), fps = 5)
+    save(path, stack(frames; dims=3), fps=5)
 end
 
 end

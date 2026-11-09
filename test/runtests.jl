@@ -48,14 +48,17 @@ end
         # Particles should end closer (on avg) to the vertical edge column.
         edge_col = div(64, 2)
         d_start = mean(abs(t[1][1] - edge_col) for t in trajs)
-        d_end   = mean(abs(t[end][1] - edge_col) for t in trajs)
+        d_end = mean(abs(t[end][1] - edge_col) for t in trajs)
         @test d_end <= d_start
     end
 
     @testset "render pipeline" begin
         cfg = EdgeFlowArt.Config(
-            size = 64, steps = 10, points = 20, field = :tangent,
-            formats = Set([:svg, :png]),
+            size=64,
+            steps=10,
+            points=20,
+            field=:tangent,
+            formats=Set([:svg, :png]),
         )
         img = striped(64)
         png, svg, gif = EdgeFlowArt.render(img, cfg)

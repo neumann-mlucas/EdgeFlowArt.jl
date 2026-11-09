@@ -1,7 +1,9 @@
-Manifest.toml
-dev/Manifest.toml
 test/results/
 test/artifacts/
-test/fixtures/_inputs/
+
+# local fixture images (not versioned)
+test/fixtures/*
+!test/fixtures/.gitkeep
+
 *.log
 .DS_Store

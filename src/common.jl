@@ -1,6 +1,6 @@
 # common.jl — vendored shared utilities.
-# Kept in sync (by convention) between StringArt.jl/src/ and MonteCarloArt.jl/src/.
-# Edits in one must be mirrored to the other.
+# Source of truth: ArtScaffold.jl/src/common.jl. Copied into StringArt.jl,
+# MonteCarloArt.jl, EdgeFlowArt.jl. Mirror edits manually (diff to check drift).
 
 using ArgParse
 using Clustering: kmeans
@@ -47,7 +47,7 @@ end
 
 """ Load image, crop to centered square, resize to `size`x`size`. """
 function load_square(path::AbstractString, size::Int)
-    @assert isfile(path) "Image file not found: $path"
+    isfile(path) || error("Image file not found: $path")
     img = Images.load(path)
     Images.imresize(crop_to_square(img), size, size)
 end
@@ -72,9 +72,9 @@ parse_hex_colors(spec::AbstractString)::Vector{RGB{N0f8}} =
 )
 
 """ K-means palette in Lab space; returns k Lab centroids. """
-function kmeans_palette_lab(img_lab::AbstractMatrix{<:Lab}, k::Int; maxiter::Int = 100)
+function kmeans_palette_lab(img_lab::AbstractMatrix{<:Lab}, k::Int; maxiter::Int=100)
     pixels = reshape(collect(channelview(img_lab)), 3, :)
-    result = kmeans(pixels, k, maxiter = maxiter, display = :none)
+    result = kmeans(pixels, k, maxiter=maxiter, display=:none)
     Lab{Float64}[Lab{Float64}(c...) for c in eachcol(result.centers)]
 end
 
@@ -99,8 +99,13 @@ end
 # --- CLI helpers ---------------------------------------------------------
 
 """ Register CLI args common to both projects (input/output/steps/verbose).
-    Canvas size is per-project (only StringArt uses it). """
-function add_common_args!(parser::ArgParseSettings; steps_default::Int = 1000)
+    Canvas size is per-project (only StringArt uses it).
+    Per-project default output path via `output_default` kwarg. """
+function add_common_args!(
+    parser::ArgParseSettings;
+    steps_default::Int=1000,
+    output_default::AbstractString="output.png",
+)
     @add_arg_table! parser begin
         "--input", "-i"
         help = "input image path"
@@ -109,7 +114,7 @@ function add_common_args!(parser::ArgParseSettings; steps_default::Int = 1000)
         "--output", "-o"
         help = "output path with extension (.png/.svg/.gif); comma-separate for multiple"
         arg_type = String
-        default = "output.png"
+        default = output_default
         "--steps"
         help = "algorithm iteration count"
         arg_type = Int
@@ -134,7 +139,7 @@ mutable struct LogTimer
     start::Dates.DateTime
     last::Dates.DateTime
 end
-LogTimer() = (n = Dates.now(); LogTimer(n, n))
+LogTimer() = (n=Dates.now(); LogTimer(n, n))
 
 function (t::LogTimer)()
     now_dt = Dates.now()

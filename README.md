@@ -36,7 +36,7 @@ CLI knobs:
 
 ```
 --input INPUT
---output OUTPUT             .png / .svg (comma-separate for both)
+--output OUTPUT             .png / .svg (comma-separate for both; .gif errors)
 --size S                    default 512
 --field MODE                sobel | dt | tangent   default tangent
 --points N                  default 3000
@@ -48,6 +48,13 @@ CLI knobs:
 --opacity A                 default 0.6
 --seed                      default 42
 --verbose
+```
+
+## Tests
+
+```bash
+just test    # synthetic striped fixtures
+just check   # JET lint + tests + shellcheck
 ```
 
 ## Layout
@@ -69,9 +76,10 @@ EdgeFlowArt.jl/
 └── .gitignore
 ```
 
-## Deferred (`ponytail:` markers in code)
+## Deferred
 
-Small on purpose. Room to grow:
+Small on purpose. Room to grow (only GIF, Wu anti-aliasing and the
+structure tensor carry `ponytail:` markers in code; the rest are ideas):
 
 - **Repulsion** between nearby particles → Poisson-disk on edges (kills bunching on strong ridges). Add with a spatial hash grid.
 - **Structure-tensor eigendecomp** for tangent field (with coherence weighting). Current tangent is `⊥∇I` — good enough for portraits, upgrade if noisy on textured images.
@@ -79,4 +87,5 @@ Small on purpose. Room to grow:
 - **Harris-weighted seeding**: seed density ∝ corner response, concentrate budget on features.
 - **Perlin blend**: `F_blend = (1-w)·F_Perlin + w·F_tangent` for Fidenza-style curves.
 - **Palette lock** + variable stroke width. Reuse `kmeans_palette_lab` from `common.jl`.
-- **GIF of the descent** (checkpoint trajectories per K frames).
+- **GIF of the descent** (checkpoint trajectories per K frames). `-o *.gif` currently errors.
+- **Anti-aliased PNG** (Xiaolin Wu) — PNG preview is plain Bresenham.
