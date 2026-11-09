@@ -65,6 +65,17 @@ end
         @test isempty(gif)
     end
 
+    @testset "gif frames + anti-aliased raster" begin
+        cfg = EdgeFlowArt.Config(size=64, steps=10, points=50, formats=Set([:gif, :png]))
+        png, _, gif = EdgeFlowArt.render(striped(64), cfg)
+        @test 2 <= length(gif) <= EdgeFlowArt.GIF_FRAMES
+        @test gif[end] == png                         # last frame = final drawing
+        @test count(!=(RGB{N0f8}(1, 1, 1)), gif[1]) < count(!=(RGB{N0f8}(1, 1, 1)), png)
+        canvas = fill(RGB{N0f8}(1, 1, 1), 16, 16)
+        EdgeFlowArt.draw_line!(canvas, 1.0, 1.0, 15.0, 5.3, RGB{N0f8}(0, 0, 0), 1.0f0)
+        @test length(unique(canvas)) > 3              # partial coverage, not 2-level
+    end
+
     @testset "soft-normalized field: fast on edges, slow on noise" begin
         Random.seed!(1)
         img = striped(64)

@@ -15,8 +15,6 @@ function main()
     outputs = EdgeFlowArt.resolve_output(args["output"])
     formats = Set(fmt for (_, fmt) in outputs)
 
-    # ponytail: no GIF yet (render returns no frames); fail loud instead of writing nothing
-    :gif in formats && error("GIF output not supported yet; use .png or .svg")
 
     cfg = EdgeFlowArt.Config(
         size=args["size"],

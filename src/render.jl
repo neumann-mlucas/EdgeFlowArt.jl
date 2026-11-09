@@ -1,4 +1,4 @@
-# Rendering: SVG polylines + naive PNG line rasterization.
+# Rendering: SVG polylines + anti-aliased PNG / GIF rasterization.
 
 # Stroke color = mean source color along the trajectory (rounded pixels).
 # Start-pixel color mislabels paths that cross color boundaries.
@@ -41,7 +41,22 @@ function svg_polylines(
     return String(take!(io))
 end
 
-# Bresenham line into an RGB canvas. Alpha-blend against existing pixel.
+# Alpha-blend `color` into canvas[y, x] with weight `a` (no-op off canvas).
+@inline function blend!(canvas::Matrix{RGB{N0f8}}, x::Int, y::Int, color, a::Float32)
+    h, w = size(canvas)
+    (1 <= x <= w && 1 <= y <= h) || return nothing
+    bg = RGB{Float32}(canvas[y, x])
+    canvas[y, x] = RGB{N0f8}(
+        clamp(a * color.r + (1 - a) * bg.r, 0.0f0, 1.0f0),
+        clamp(a * color.g + (1 - a) * bg.g, 0.0f0, 1.0f0),
+        clamp(a * color.b + (1 - a) * bg.b, 0.0f0, 1.0f0),
+    )
+    return nothing
+end
+
+# Anti-aliased line (Xiaolin Wu): per major-axis step, split coverage between
+# the two pixels straddling the line.
+# ponytail: no endpoint coverage; shared polyline vertices get blended twice.
 function draw_line!(
     canvas::Matrix{RGB{N0f8}},
     x0::Real,
@@ -51,59 +66,53 @@ function draw_line!(
     color::RGB{N0f8},
     alpha::Float32,
 )
-    h, w = size(canvas)
-    ix0 = round(Int, x0)
-    iy0 = round(Int, y0)
-    ix1 = round(Int, x1)
-    iy1 = round(Int, y1)
-    dx = abs(ix1 - ix0)
-    dy = -abs(iy1 - iy0)
-    sx = ix0 < ix1 ? 1 : -1
-    sy = iy0 < iy1 ? 1 : -1
-    err = dx + dy
     cf = RGB{Float32}(color)
-    while true
-        if 1 <= ix0 <= w && 1 <= iy0 <= h
-            bg = RGB{Float32}(canvas[iy0, ix0])
-            r = alpha * cf.r + (1 - alpha) * bg.r
-            g = alpha * cf.g + (1 - alpha) * bg.g
-            b = alpha * cf.b + (1 - alpha) * bg.b
-            canvas[iy0, ix0] = RGB{N0f8}(
-                clamp(r, 0.0f0, 1.0f0),
-                clamp(g, 0.0f0, 1.0f0),
-                clamp(b, 0.0f0, 1.0f0),
-            )
-        end
-        (ix0 == ix1 && iy0 == iy1) && break
-        e2 = 2 * err
-        if e2 >= dy
-            err += dy
-            ix0 += sx
-        end
-        if e2 <= dx
-            err += dx
-            iy0 += sy
+    steep = abs(y1 - y0) > abs(x1 - x0)
+    if steep
+        x0, y0, x1, y1 = y0, x0, y1, x1
+    end
+    if x0 > x1
+        x0, x1, y0, y1 = x1, x0, y1, y0
+    end
+    g = x1 == x0 ? 0.0f0 : Float32((y1 - y0) / (x1 - x0))
+    for x = round(Int, x0):round(Int, x1)
+        y = Float32(y0 + g * (x - x0))
+        yi = floor(Int, y)
+        f = y - yi
+        if steep
+            blend!(canvas, yi, x, cf, alpha * (1 - f))
+            blend!(canvas, yi + 1, x, cf, alpha * f)
+        else
+            blend!(canvas, x, yi, cf, alpha * (1 - f))
+            blend!(canvas, x, yi + 1, cf, alpha * f)
         end
     end
     return nothing
 end
 
-# Rasterize all trajectories onto a white canvas via Bresenham. Cheap PNG
-# preview. ponytail: no anti-aliasing; add Xiaolin Wu if lines look chunky.
+function draw_polyline!(canvas, traj::Vector{Point2}, col::RGB{N0f8}, opacity::Float32)
+    for j = 1:(length(traj)-1)
+        (x0, y0), (x1, y1) = traj[j], traj[j+1]
+        draw_line!(canvas, x0, y0, x1, y1, col, opacity)
+    end
+end
+
+# Rasterize strokes in drawing order onto a white canvas. With `frames > 0`,
+# also snapshot the canvas every length/frames strokes (GIF of the drawing).
 function raster_polylines(
     trajs::Vector{Vector{Point2}},
     colors::Vector{RGB{N0f8}},
     w::Int,
     h::Int;
     opacity::Float32=0.6f0,
-)::Matrix{RGB{N0f8}}
+    frames::Int=0,
+)::Tuple{Matrix{RGB{N0f8}},Vector{Matrix{RGB{N0f8}}}}
     canvas = fill(RGB{N0f8}(1, 1, 1), h, w)
-    for (traj, col) in zip(trajs, colors)
-        for j = 1:(length(traj)-1)
-            (x0, y0) = traj[j]
-            (x1, y1) = traj[j+1]
-            draw_line!(canvas, x0, y0, x1, y1, col, opacity)
-        end
+    snaps = Matrix{RGB{N0f8}}[]
+    every = frames > 0 ? max(1, cld(length(trajs), frames)) : 0
+    for (i, (traj, col)) in enumerate(zip(trajs, colors))
+        draw_polyline!(canvas, traj, col, opacity)
+        every > 0 && (i % every == 0 || i == length(trajs)) && push!(snaps, copy(canvas))
     end
-    return canvas
+    return canvas, snaps
 end

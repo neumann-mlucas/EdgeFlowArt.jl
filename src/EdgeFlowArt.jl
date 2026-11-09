@@ -11,6 +11,7 @@ include("render.jl")
 # --- types ---------------------------------------------------------------
 
 const Canvas = Matrix{RGB{N0f8}}
+const GIF_FRAMES = 40             # strokes appear in drawing order
 
 # --- config --------------------------------------------------------------
 
@@ -42,6 +43,7 @@ load_input(path::AbstractString, size::Int) = load_square(path, size)
 function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{Canvas}}
     want_svg = :svg in cfg.formats
     want_png = :png in cfg.formats
+    want_gif = :gif in cfg.formats
     ts = cfg.timer
 
     h, w = size(input)
@@ -60,11 +62,18 @@ function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{
     @info ts() * "Sampling colors"
     colors = [path_color(input, t) for t in trajs]
 
-    png = if want_png
-        @info ts() * "Rasterizing PNG"
-        raster_polylines(trajs, colors, w, h; opacity=Float32(cfg.opacity))
+    png, gif = if want_png || want_gif
+        @info ts() * "Rasterizing"
+        raster_polylines(
+            trajs,
+            colors,
+            w,
+            h;
+            opacity=Float32(cfg.opacity),
+            frames=want_gif ? GIF_FRAMES : 0,
+        )
     else
-        fill(RGB{N0f8}(1, 1, 1), h, w)
+        fill(RGB{N0f8}(1, 1, 1), h, w), Canvas[]
     end
 
     svg = if want_svg
@@ -81,9 +90,7 @@ function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{
         ""
     end
 
-    # ponytail: no GIF (would need per-frame trajectory checkpointing).
-    # Add if animation of the descent is worth it.
-    return (png, svg, Canvas[])
+    return (png, svg, gif)
 end
 
 # --- output helpers ------------------------------------------------------
