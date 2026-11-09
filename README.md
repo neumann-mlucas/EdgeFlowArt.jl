@@ -57,6 +57,17 @@ just test    # synthetic striped fixtures
 just check   # JET lint + tests + shellcheck
 ```
 
+Quality sweep (fixtures in `test/fixtures/`, not versioned):
+
+```bash
+PHASE=baseline ./test/scripts/baseline.sh            # fixtures × {tangent, dt, sobel}
+julia --project=. test/scripts/metrics.jl baseline p1 # → test/results/metrics.csv + sheet_<field>.png
+```
+
+Metrics (from the SVG polylines vs the source): `edge_prec`/`edge_rec`
+(ink on edges / edges inked), `flat_ink` (ink on flat areas), `pile_p99`/`pile_max`
+(paths per pixel), `dE` (stroke vs source color), `turn` (zigzag), `len`, `svg_kb`.
+
 ## Layout
 
 ```
