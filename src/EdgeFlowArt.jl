@@ -11,7 +11,9 @@ include("render.jl")
 # --- types ---------------------------------------------------------------
 
 const Canvas = Matrix{RGB{N0f8}}
-const GIF_FRAMES = 40             # strokes appear in drawing order
+const GIF_FRAMES = 60             # growth frames: seed dots → full strokes
+const GIF_FPS = 12
+const GIF_HOLD = 18               # extra copies of the last frame (pause before loop)
 
 # --- config --------------------------------------------------------------
 
@@ -57,23 +59,34 @@ function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{
     seeds = seed_edges(cfg.points, edge_mask(gray, cfg.tau), rng)
 
     @info ts() * "Integrating $(cfg.steps) steps"
-    trajs = filter!(t -> length(t) > 1, integrate(seeds, Fx, Fy, cfg.steps, cfg.eta))
+    trajs = integrate(seeds, Fx, Fy, cfg.steps, cfg.eta)
+    keep = length.(trajs) .> 1
+    heads = [findfirst(==(s), t) for (s, t) in zip(seeds[keep], trajs[keep])]
+    trajs = trajs[keep]
 
     @info ts() * "Sampling colors"
     colors = [path_color(input, t) for t in trajs]
 
-    png, gif = if want_png || want_gif
-        @info ts() * "Rasterizing"
-        raster_polylines(
+    png = if want_png
+        @info ts() * "Rasterizing PNG"
+        raster_polylines(trajs, colors, w, h; opacity=Float32(cfg.opacity))
+    else
+        fill(RGB{N0f8}(1, 1, 1), h, w)
+    end
+
+    gif = if want_gif
+        @info ts() * "Rasterizing GIF ($GIF_FRAMES frames)"
+        raster_growth(
             trajs,
+            heads,
             colors,
             w,
             h;
             opacity=Float32(cfg.opacity),
-            frames=want_gif ? GIF_FRAMES : 0,
+            frames=GIF_FRAMES,
         )
     else
-        fill(RGB{N0f8}(1, 1, 1), h, w), Canvas[]
+        Canvas[]
     end
 
     svg = if want_svg
@@ -97,7 +110,8 @@ end
 
 function save_gif(path::AbstractString, frames::Vector{Canvas})
     isempty(frames) && return
-    save(path, stack(frames; dims=3), fps=5)
+    held = [frames; fill(frames[end], GIF_HOLD)]
+    save(path, stack(held; dims=3), fps=GIF_FPS)
 end
 
 end

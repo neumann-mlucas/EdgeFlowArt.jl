@@ -3,7 +3,7 @@
 Image → strokes that trace the image's edges. Particles are seeded on edge
 pixels, then traced both ways along the image's tangent field until they run
 into another stroke. Each trajectory becomes one stroke. SVG-first; PNG is an
-anti-aliased preview; GIF shows the strokes appearing in drawing order.
+anti-aliased preview; GIF animates every stroke growing from its seed dot to the full line.
 
 Same vein as StringArt.jl / MonteCarloArt.jl / PrimitiveArt.md / StippleArt.md /
 TriMosaic.md: constructive approximation via constrained primitive placement.

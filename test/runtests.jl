@@ -68,9 +68,19 @@ end
     @testset "gif frames + anti-aliased raster" begin
         cfg = EdgeFlowArt.Config(size=64, steps=10, points=50, formats=Set([:gif, :png]))
         png, _, gif = EdgeFlowArt.render(striped(64), cfg)
-        @test 2 <= length(gif) <= EdgeFlowArt.GIF_FRAMES
-        @test gif[end] == png                         # last frame = final drawing
-        @test count(!=(RGB{N0f8}(1, 1, 1)), gif[1]) < count(!=(RGB{N0f8}(1, 1, 1)), png)
+        ink(c) = count(!=(RGB{N0f8}(1, 1, 1)), c)
+        @test length(gif) == EdgeFlowArt.GIF_FRAMES + 1
+        @test issorted(ink.(gif))                     # strokes only grow
+        @test ink(gif[1]) < 0.2 * ink(png)            # frame 1 = seed dots
+        @test abs(ink(gif[end]) - ink(png)) <= 0.05 * ink(png)  # fully traced
+        # one stroke, seed in the middle: grows both ways from the seed
+        t = [(Float32(x), 8.0f0) for x = 2:30]
+        fr = EdgeFlowArt.raster_growth([t], [15], [RGB{N0f8}(0, 0, 0)], 32, 16; frames=4)
+        cols(c) = findall(!=(RGB{N0f8}(1, 1, 1)), c[8, :])
+        @test cols(fr[1]) == [16]                     # t[15] = (16, 8)
+        @test minimum(cols(fr[3])) < 16 < maximum(cols(fr[3]))
+        @test 16 - minimum(cols(fr[3])) == maximum(cols(fr[3])) - 16
+        @test cols(fr[end]) == collect(2:30)
         canvas = fill(RGB{N0f8}(1, 1, 1), 16, 16)
         EdgeFlowArt.draw_line!(canvas, 1.0, 1.0, 15.0, 5.3, RGB{N0f8}(0, 0, 0), 1.0f0)
         @test length(unique(canvas)) > 3              # partial coverage, not 2-level

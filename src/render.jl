@@ -97,22 +97,50 @@ function draw_polyline!(canvas, traj::Vector{Point2}, col::RGB{N0f8}, opacity::F
     end
 end
 
-# Rasterize strokes in drawing order onto a white canvas. With `frames > 0`,
-# also snapshot the canvas every length/frames strokes (GIF of the drawing).
+# Rasterize all strokes onto a white canvas.
 function raster_polylines(
     trajs::Vector{Vector{Point2}},
     colors::Vector{RGB{N0f8}},
     w::Int,
     h::Int;
     opacity::Float32=0.6f0,
-    frames::Int=0,
-)::Tuple{Matrix{RGB{N0f8}},Vector{Matrix{RGB{N0f8}}}}
+)::Matrix{RGB{N0f8}}
     canvas = fill(RGB{N0f8}(1, 1, 1), h, w)
-    snaps = Matrix{RGB{N0f8}}[]
-    every = frames > 0 ? max(1, cld(length(trajs), frames)) : 0
-    for (i, (traj, col)) in enumerate(zip(trajs, colors))
+    for (traj, col) in zip(trajs, colors)
         draw_polyline!(canvas, traj, col, opacity)
-        every > 0 && (i % every == 0 || i == length(trajs)) && push!(snaps, copy(canvas))
     end
-    return canvas, snaps
+    return canvas
+end
+
+# GIF frames of all strokes growing at once: frame 1 = a dot at every seed
+# (`heads[i]` = seed index in trajs[i]), then each frame extends every stroke
+# both ways by 1/frames of its own length, so all finish on the last frame.
+# Each segment is blended once (incremental), so the canvas is reused.
+function raster_growth(
+    trajs::Vector{Vector{Point2}},
+    heads::Vector{Int},
+    colors::Vector{RGB{N0f8}},
+    w::Int,
+    h::Int;
+    opacity::Float32=0.6f0,
+    frames::Int=60,
+)::Vector{Matrix{RGB{N0f8}}}
+    canvas = fill(RGB{N0f8}(1, 1, 1), h, w)
+    for (t, hd, c) in zip(trajs, heads, colors)
+        blend!(canvas, round(Int, t[hd][1]), round(Int, t[hd][2]), RGB{Float32}(c), opacity)
+    end
+    snaps = [copy(canvas)]
+    for f = 1:frames
+        for (t, hd, c) in zip(trajs, heads, colors)
+            nf, nb = length(t) - hd, hd - 1          # segments ahead / behind the seed
+            a, b = fld((f - 1) * nf, frames), fld(f * nf, frames)
+            p, q = fld((f - 1) * nb, frames), fld(f * nb, frames)
+            for j in Iterators.flatten(((hd+a):(hd+b-1), (hd-q):(hd-p-1)))
+                (x0, y0), (x1, y1) = t[j], t[j+1]
+                draw_line!(canvas, x0, y0, x1, y1, c, opacity)
+            end
+        end
+        push!(snaps, copy(canvas))
+    end
+    return snaps
 end
