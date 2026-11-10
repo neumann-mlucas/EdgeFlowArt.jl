@@ -35,6 +35,27 @@ end
         @test sum(abs.(Fy[8:56, 32])) > 10 * sum(abs.(Fx[8:56, 32]))
     end
 
+    @testset "stalled strokes end instead of repeating points" begin
+        seeds = [(10.0f0, 10.0f0), (30.0f0, 30.0f0)]
+        slow = EdgeFlowArt.integrate(
+            seeds,
+            fill(0.01f0, 40, 40),
+            zeros(Float32, 40, 40),
+            50,
+            1.0f0,
+        )
+        @test all(length(t) == 1 for t in slow)          # 0.01 px/step < MIN_STEP
+        fast = EdgeFlowArt.integrate(
+            seeds,
+            fill(0.5f0, 40, 40),
+            zeros(Float32, 40, 40),
+            10,
+            1.0f0,
+        )
+        @test all(length(t) > 1 for t in fast)
+        @test all(t[k] != t[k+1] for t in fast for k = 1:(length(t)-1))
+    end
+
     @testset "orientation sampling ignores sign flips" begin
         Fx = zeros(Float32, 8, 8)
         Fy = Float32[isodd(i + j) ? 1 : -1 for i = 1:8, j = 1:8]  # ±vertical checkerboard

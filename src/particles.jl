@@ -56,17 +56,19 @@ function seed_edges(n::Int, mask::BitMatrix, rng::AbstractRNG)::Vector{Point2}
     end
 end
 
-# Integrate n particles for K steps through the tangent field. Returns Vector
-# of trajectories. The field has a 180° ambiguity that would fold curves back on
-# themselves, so each step is aligned with the previous displacement to keep
-# advection monotone along the streamline.
-# Occupancy cell size (px). A particle stops on entering a cell another particle
+# Occupancy cell size (px). A stroke stops on entering a cell another stroke
 # already drew through, so strokes don't stack on the same contour (pile-up).
-# Seeds landing in a taken cell never start (1-point trajectory).
-# Strokes are drawn one after another, not in lockstep.
 # ponytail: fixed-grid first-come ownership, Jobard–Lefer distance test if
 # grid-aligned gaps show.
 const SPACING = 3.0f0
+# A step shorter than this (px) means the field has died out: end the stroke
+# instead of piling up duplicate points until `steps` runs out.
+const MIN_STEP = 0.05f0
+
+# Trace one stroke per seed through the tangent field (sign-ambiguous: each
+# step is aligned with the previous one so curves don't fold back). Strokes
+# are traced one after another (seed order = random), both ways from the
+# seed; seeds landing in a taken cell never start (1-point trajectory).
 
 function integrate(
     seeds::Vector{Point2},
@@ -92,6 +94,7 @@ function integrate(
             end
             xn = clamp(x + eta * vx, 1.0f0, Float32(w))
             yn = clamp(y + eta * vy, 1.0f0, Float32(h))
+            hypot(xn - x, yn - y) < MIN_STEP && break
             c = cell(xn, yn)
             owner[c] == 0 || owner[c] == i || break
             owner[c] = i
@@ -102,9 +105,7 @@ function integrate(
         return pts
     end
     trajs = [Point2[s] for s in seeds]
-    # one full stroke at a time (seed order = random): first strokes run long,
-    # later ones fill the gaps; a seed in a taken cell is skipped. Each stroke
-    # is traced both ways from its seed.
+    # first strokes run long, later ones fill the gaps
     @inbounds for i = 1:n
         x, y = seeds[i]
         c = cell(x, y)
