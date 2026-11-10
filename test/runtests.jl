@@ -35,16 +35,16 @@ end
         @test sum(abs.(Fy[8:56, 32])) > 10 * sum(abs.(Fx[8:56, 32]))
     end
 
-    @testset "stalled strokes end instead of repeating points" begin
+    @testset "dead field ends strokes; live field moves eta per step" begin
         seeds = [(10.0f0, 10.0f0), (30.0f0, 30.0f0)]
         slow = EdgeFlowArt.integrate(
             seeds,
-            fill(0.01f0, 40, 40),
+            fill(1.0f-4, 40, 40),
             zeros(Float32, 40, 40),
             50,
             1.0f0,
         )
-        @test all(length(t) == 1 for t in slow)          # 0.01 px/step < MIN_STEP
+        @test all(length(t) == 1 for t in slow)          # |F| < MIN_FIELD
         fast = EdgeFlowArt.integrate(
             seeds,
             fill(0.5f0, 40, 40),
@@ -54,6 +54,11 @@ end
         )
         @test all(length(t) > 1 for t in fast)
         @test all(t[k] != t[k+1] for t in fast for k = 1:(length(t)-1))
+        # weak field (0.5) still steps a full eta: unit speed
+        @test all(
+            hypot(t[k+1][1] - t[k][1], t[k+1][2] - t[k][2]) ≈ 1.0f0 for t in fast for
+            k = 1:(length(t)-1) if 1 < t[k+1][1] < 40
+        )
     end
 
     @testset "orientation sampling ignores sign flips" begin
@@ -146,19 +151,22 @@ end
         @test flat < 0.25 * edge
     end
 
-    @testset "spacing: no two strokes share a cell" begin
-        gray = EdgeFlowArt.to_gray(striped(64))
-        Fx, Fy = EdgeFlowArt.field_tangent(gray, 1.0f0)
-        # many seeds on one contour: without spacing they would all overlap
-        seeds = [(32.0f0, Float32(y)) for y = 10:2:30]
-        trajs = EdgeFlowArt.integrate(seeds, Fx, Fy, 40, 1.0f0)
-        owners = Dict{Tuple{Int,Int},Set{Int}}()
-        for (i, t) in enumerate(trajs), p in (length(t) > 1 ? t : ())
-            c = (floor(Int, (p[2] - 1) / 2), floor(Int, (p[1] - 1) / 2))
-            push!(get!(owners, c, Set{Int}()), i)
-        end
-        @test all(length(v) == 1 for v in values(owners))
-        @test sum(length, trajs) < length(seeds) * 41 ÷ 2   # most got cut short
+    @testset "spacing: strokes never come within STOP_DIST of each other" begin
+        # concentric swirl: many strokes run side by side
+        Fx = Float32[-(i - 32) for i = 1:64, j = 1:64]
+        Fy = Float32[j - 32 for i = 1:64, j = 1:64]
+        rng = MersenneTwister(0)
+        seeds = [(1 + 63 * rand(rng, Float32), 1 + 63 * rand(rng, Float32)) for _ = 1:300]
+        trajs = EdgeFlowArt.integrate(seeds, Fx, Fy, 200, 1.0f0)
+        live = [t for t in trajs if length(t) > 1]
+        @test length(live) > 10
+        gap = minimum(
+            hypot(p[1] - q[1], p[2] - q[2]) for a = 1:length(live) for
+            b = (a+1):length(live) for p in live[a] for q in live[b];
+            init=Inf32,
+        )
+        @test gap >= EdgeFlowArt.STOP_DIST
+        @test count(==(1) ∘ length, trajs) > 0   # seeds next to a stroke never start
     end
 
     @testset "path color = mean along trajectory" begin

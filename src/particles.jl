@@ -56,20 +56,22 @@ function seed_edges(n::Int, mask::BitMatrix, rng::AbstractRNG)::Vector{Point2}
     end
 end
 
-# Occupancy cell size (px). A stroke stops on entering a cell another stroke
-# already drew through, so strokes don't stack on the same contour (pile-up).
-# ponytail: fixed-grid first-come ownership, Jobard–Lefer distance test if
-# grid-aligned gaps show.
+# Jobard–Lefer spacing (px): a stroke starts only where no other stroke is
+# within SPACING, and stops once it comes within STOP_DIST of another one.
+# Stopping closer than the seed spacing lets neighbours run side by side
+# instead of cutting each other off (a cell test ended 97% of strokes early).
 const SPACING = 3.0f0
-# A step shorter than this (px) means the field has died out: end the stroke
-# instead of piling up duplicate points until `steps` runs out.
+const STOP_DIST = 1.5f0
+# A step shorter than this (px) means the stroke is pinned at the border.
 const MIN_STEP = 0.05f0
+# Field magnitude below this = no direction left (flat image): end the stroke.
+const MIN_FIELD = 1.0f-3
 
 # Trace one stroke per seed through the tangent field (sign-ambiguous: each
-# step is aligned with the previous one so curves don't fold back). Strokes
-# are traced one after another (seed order = random), both ways from the
-# seed; seeds landing in a taken cell never start (1-point trajectory).
-
+# step is aligned with the previous one so curves don't fold back). Every step
+# moves exactly `eta` px, so `steps * eta` bounds the length per direction.
+# Strokes are traced one after another (seed order = random), both ways from
+# the seed; seeds too close to an earlier stroke never start (1-point trajectory).
 function integrate(
     seeds::Vector{Point2},
     Fx::Matrix{Float32},
@@ -78,26 +80,34 @@ function integrate(
     eta::Float32,
 )::Vector{Vector{Point2}}
     h, w = size(Fx)
-    n = length(seeds)
-    owner = zeros(Int32, cld(h, Int(SPACING)) + 1, cld(w, Int(SPACING)) + 1)
-    cell(x, y) =
-        CartesianIndex(floor(Int, (y - 1) / SPACING) + 1, floor(Int, (x - 1) / SPACING) + 1)
-    # Follow the streamline from (x, y) starting in direction (px, py) until
-    # it enters a cell owned by another stroke or runs out of steps.
+    # points bucketed by SPACING-sized cells; distance tests scan the 3×3 block
+    gh, gw = cld(h, Int(SPACING)) + 1, cld(w, Int(SPACING)) + 1
+    grid = [Tuple{Float32,Float32,Int32}[] for _ = 1:gh, _ = 1:gw]
+    cell(x, y) = (floor(Int, (y - 1) / SPACING) + 1, floor(Int, (x - 1) / SPACING) + 1)
+    add!(x, y, i) = push!(grid[cell(x, y)...], (x, y, Int32(i)))
+    function near(x, y, i, d)
+        r, c = cell(x, y)
+        for rr = max(1, r - 1):min(gh, r + 1), cc = max(1, c - 1):min(gw, c + 1)
+            for (qx, qy, o) in grid[rr, cc]
+                o != i && (qx - x)^2 + (qy - y)^2 < d^2 && return true
+            end
+        end
+        return false
+    end
+    # Follow the streamline from (x, y) starting in direction (px, py) until it
+    # nears another stroke, the field dies out, or it runs out of steps.
     function trace(x, y, px, py, i)
         pts = Point2[]
         for _ = 1:steps
             vx, vy = sample_field(Fx, Fy, x, y, px, py)
-            if vx * px + vy * py < 0.0f0
-                vx = -vx
-                vy = -vy
-            end
-            xn = clamp(x + eta * vx, 1.0f0, Float32(w))
-            yn = clamp(y + eta * vy, 1.0f0, Float32(h))
+            m = hypot(vx, vy)
+            m < MIN_FIELD && break
+            s = (vx * px + vy * py < 0.0f0 ? -eta : eta) / m
+            xn = clamp(x + s * vx, 1.0f0, Float32(w))
+            yn = clamp(y + s * vy, 1.0f0, Float32(h))
             hypot(xn - x, yn - y) < MIN_STEP && break
-            c = cell(xn, yn)
-            owner[c] == 0 || owner[c] == i || break
-            owner[c] = i
+            near(xn, yn, i, STOP_DIST) && break
+            add!(xn, yn, i)
             px, py = xn - x, yn - y
             x, y = xn, yn
             push!(pts, (x, y))
@@ -106,11 +116,9 @@ function integrate(
     end
     trajs = [Point2[s] for s in seeds]
     # first strokes run long, later ones fill the gaps
-    @inbounds for i = 1:n
-        x, y = seeds[i]
-        c = cell(x, y)
-        owner[c] == 0 || continue
-        owner[c] = i
+    @inbounds for (i, (x, y)) in enumerate(seeds)
+        near(x, y, i, SPACING) && continue
+        add!(x, y, i)
         vx, vy = sample_field(Fx, Fy, x, y)
         fwd = trace(x, y, vx, vy, i)
         bwd = trace(x, y, -vx, -vy, i)

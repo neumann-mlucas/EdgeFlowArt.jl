@@ -8,8 +8,8 @@ using Statistics: quantile
 to_gray(img::AbstractMatrix)::Matrix{Float32} = Float32.(Gray.(img))
 
 # Soft-normalize in-place: F / (|F| + ε), ε = SOFT_EPS_Q99 × 99th-pct magnitude.
-# Strong edges move at ≥ ~0.67 px/step, flat regions (noise-level gradient)
-# barely move instead of amplifying noise into full-speed scribbles.
+# Steps are unit-speed, so magnitude only weights bilinear blending (coherent
+# corners dominate) and lets dead regions fall under MIN_FIELD.
 const SOFT_EPS_Q99 = 0.5f0
 function normalize_field!(Fx::Matrix{Float32}, Fy::Matrix{Float32})
     M = @. sqrt(Fx^2 + Fy^2)

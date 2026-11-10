@@ -29,8 +29,8 @@ preview, and a GIF where every stroke grows from a dot to its full length.
    $J = G_\sigma * (\nabla I\, \nabla I^T)$. Its minor eigenvector points *along*
    edges; its strength $\sqrt{\lambda_1 - \lambda_2}$ is high where the orientation
    is coherent (a clear edge or texture) and near zero on flat areas or noise.
-   The field is soft-normalized, $F / (|F| + \varepsilon)$, so strokes move fast
-   on strong edges and barely move on noise.
+   The field gives the direction; every step moves a fixed `--eta` px, so a
+   stroke's reach is `--steps × --eta` per direction.
 
 2. **Seeds.** Pick random pixels whose edge strength (Sobel magnitude) is above
    $\min(\tau,\ \text{top 10\%})$, so even low-contrast images get seeds.
@@ -40,10 +40,11 @@ preview, and a GIF where every stroke grows from a dot to its full length.
    every step is aligned with the stroke's current heading, and bilinear sampling
    flips neighbouring vectors to agree before blending.
 
-4. **Spacing.** A 3 px occupancy grid records which stroke passed where. A stroke
-   stops when it enters a cell owned by another stroke, and a seed landing in a
-   taken cell is skipped. Strokes never pile up, early strokes run long, and later
-   ones fill the gaps — `--points` is an upper bound, not the stroke count.
+4. **Spacing** (Jobard–Lefer). A seed starts only if no other stroke is within
+   3 px; a running stroke stops once it comes within 1.5 px of another one.
+   Neighbours can run side by side for long distances without piling up; early
+   strokes run long, later ones fill the gaps — `--points` is an upper bound,
+   not the stroke count.
 
 5. **Color & tone.** Each stroke takes the mean source color along its path, and its
    width follows that color's darkness (dark ≈ 3× base, light ≈ hairline), so the
@@ -63,7 +64,7 @@ julia --project=. -O3 -t 8 main.jl -i input.jpg -o out.svg,out.png,out.gif
 --input, -i INPUT           source image (center-cropped to a square)
 --output, -o OUTPUT         .png / .svg / .gif (comma-separate for several)
 --size, -s S                canvas size in px                    default 512
---points N                  max seeds; taken cells are skipped   default 20000
+--points N                  max seeds; crowded ones are skipped  default 20000
 --tau T                     edge threshold for seeds             default 0.05
 --sigma S                   structure-tensor smoothing (px)      default 5.0
 --steps K                   max steps per direction from seed    default 400
