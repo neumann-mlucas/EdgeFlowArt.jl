@@ -66,7 +66,7 @@ function parse_cmd()
         "--points"
         help = "particle count"
         arg_type = Int
-        default = 3000
+        default = 20000
         "--eta"
         help = "step size (pixels per iteration)"
         arg_type = Float64
@@ -74,7 +74,7 @@ function parse_cmd()
         "--tau"
         help = "seeding: edge-magnitude threshold (particles start on pixels above it)"
         arg_type = Float64
-        default = 0.15
+        default = 0.05
         "--sigma"
         help = "tangent field: structure-tensor smoothing sigma (px)"
         arg_type = Float64

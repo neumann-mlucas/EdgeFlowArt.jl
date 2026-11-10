@@ -20,9 +20,9 @@ const GIF_HOLD = 18               # extra copies of the last frame (pause before
 Base.@kwdef struct Config
     size::Int = 512
     steps::Int = 200               # integration steps per direction
-    points::Int = 3000             # particle count
+    points::Int = 20000            # max seeds (taken cells are skipped)
     eta::Float32 = 1.0f0           # step size (px per step)
-    tau::Float32 = 0.15f0          # seeding: edge threshold on Sobel magnitude
+    tau::Float32 = 0.05f0          # seeding: edge threshold on Sobel magnitude
     sigma::Float32 = 1.5f0         # structure-tensor smoothing sigma (px)
     stroke_width::Float64 = 1.0
     opacity::Float64 = 0.9
