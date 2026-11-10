@@ -21,7 +21,7 @@ CSV_HEADER="phase,image,config,size,points,steps,seconds,status,git_sha"
 # name|size|points|steps
 # shellcheck disable=SC2034  # consumed by run_sweep in lib.sh
 CONFIGS=(
-  "tangent|512|4000|200"
+  "tangent|512|20000|200"
 )
 
 run_config() {
