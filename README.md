@@ -16,11 +16,11 @@ preview, and a GIF where every stroke grows from a dot to its full length.
 
 <p align="center">
   <img src="examples/van_gogh_road_with_cypress.png" alt="Van Gogh — Road with Cypress and Star" width="32%" />
-  <img src="examples/munch_the_scream.png" alt="Edvard Munch — The Scream" width="32%" />
-  <img src="examples/hokusai_red_fuji.png" alt="Hokusai — Fine Wind, Clear Morning (Red Fuji)" width="32%" />
+  <img src="examples/juno_jupiter_blues.png" alt="NASA Juno — Jupiter Blues (PIA21972)" width="32%" />
+  <img src="examples/durer_young_hare.png" alt="Albrecht Dürer — Young Hare (1502)" width="32%" />
 </p>
 
-<p align="center"><sub>Source paintings are public domain (Wikimedia Commons).</sub>
+<p align="center"><sub>Sources are public domain (Wikimedia Commons). Jupiter: NASA/JPL-Caltech/SwRI/MSSS/Gerald Eichstädt/Sean Doran.</sub>
 </p>
 
 ## Algorithm
