@@ -57,7 +57,7 @@ function parse_cmd()
         description="EdgeFlowArt - image → flow-line rendering",
         epilog="Example: julia main.jl -i input.jpg -o out.svg --points 5000",
     )
-    EdgeFlowArt.add_common_args!(parser; steps_default=200)
+    EdgeFlowArt.add_common_args!(parser; steps_default=400)
     @add_arg_table! parser begin
         "--size", "-s"
         help = "output canvas size in pixels"
@@ -76,13 +76,13 @@ function parse_cmd()
         arg_type = Float64
         default = 0.05
         "--sigma"
-        help = "tangent field: structure-tensor smoothing sigma (px)"
+        help = "tangent field: structure-tensor smoothing sigma (px); higher = smoother, longer strokes"
         arg_type = Float64
-        default = 1.5
+        default = 5.0
         "--stroke-width"
-        help = "SVG stroke width"
+        help = "base stroke width; scaled per stroke by darkness (dark = wide)"
         arg_type = Float64
-        default = 1.0
+        default = 1.2
         "--opacity"
         help = "stroke opacity in [0, 1]"
         arg_type = Float64

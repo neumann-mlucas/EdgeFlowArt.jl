@@ -66,7 +66,7 @@ end
 # Strokes are drawn one after another, not in lockstep.
 # ponytail: fixed-grid first-come ownership, Jobard–Lefer distance test if
 # grid-aligned gaps show.
-const SPACING = 2.0f0
+const SPACING = 3.0f0
 
 function integrate(
     seeds::Vector{Point2},

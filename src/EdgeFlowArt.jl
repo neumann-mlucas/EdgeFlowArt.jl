@@ -19,12 +19,12 @@ const GIF_HOLD = 18               # extra copies of the last frame (pause before
 
 Base.@kwdef struct Config
     size::Int = 512
-    steps::Int = 200               # integration steps per direction
+    steps::Int = 400               # integration steps per direction
     points::Int = 20000            # max seeds (taken cells are skipped)
     eta::Float32 = 1.0f0           # step size (px per step)
     tau::Float32 = 0.05f0          # seeding: edge threshold on Sobel magnitude
-    sigma::Float32 = 1.5f0         # structure-tensor smoothing sigma (px)
-    stroke_width::Float64 = 1.0
+    sigma::Float32 = 5.0f0         # structure-tensor smoothing sigma (px)
+    stroke_width::Float64 = 1.2
     opacity::Float64 = 0.9
     seed::Int = 42
     formats::Set{Symbol} = Set{Symbol}()
@@ -69,7 +69,14 @@ function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{
 
     png = if want_png
         @info ts() * "Rasterizing PNG"
-        raster_polylines(trajs, colors, w, h; opacity=Float32(cfg.opacity))
+        raster_polylines(
+            trajs,
+            colors,
+            w,
+            h;
+            opacity=Float32(cfg.opacity),
+            stroke_width=cfg.stroke_width,
+        )
     else
         fill(RGB{N0f8}(1, 1, 1), h, w)
     end
@@ -83,6 +90,7 @@ function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{
             w,
             h;
             opacity=Float32(cfg.opacity),
+            stroke_width=cfg.stroke_width,
             frames=GIF_FRAMES,
         )
     else

@@ -37,14 +37,17 @@ preview, and a GIF where every stroke grows from a dot to its full length.
    every step is aligned with the stroke's current heading, and bilinear sampling
    flips neighbouring vectors to agree before blending.
 
-4. **Spacing.** A 2 px occupancy grid records which stroke passed where. A stroke
+4. **Spacing.** A 3 px occupancy grid records which stroke passed where. A stroke
    stops when it enters a cell owned by another stroke, and a seed landing in a
    taken cell is skipped. Strokes never pile up, early strokes run long, and later
    ones fill the gaps — `--points` is an upper bound, not the stroke count.
 
-5. **Color & output.** Each stroke takes the mean source color along its path and is
-   written as an SVG polyline, rasterized with Xiaolin Wu anti-aliasing for the PNG,
-   and animated for the GIF.
+5. **Color & tone.** Each stroke takes the mean source color along its path, and its
+   width follows that color's darkness (dark ≈ 3× base, light ≈ hairline), so the
+   drawing keeps the source's light/dark contrast.
+
+6. **Output.** SVG polylines; the PNG and GIF are rasterized with anti-aliased round
+   stamps at the same widths. The GIF grows every stroke from its seed dot.
 
 ## Usage
 
@@ -59,10 +62,10 @@ julia --project=. -O3 -t 8 main.jl -i input.jpg -o out.svg,out.png,out.gif
 --size, -s S                canvas size in px                    default 512
 --points N                  max seeds; taken cells are skipped   default 20000
 --tau T                     edge threshold for seeds             default 0.05
---sigma S                   structure-tensor smoothing (px)      default 1.5
---steps K                   max steps per direction from seed    default 200
+--sigma S                   structure-tensor smoothing (px)      default 5.0
+--steps K                   max steps per direction from seed    default 400
 --eta E                     step size (px per step)              default 1.0
---stroke-width W            SVG stroke width                     default 1.0
+--stroke-width W            base width, scaled by darkness       default 1.2
 --opacity A                 stroke opacity                       default 0.9
 --seed N                    RNG seed                             default 42
 --verbose
@@ -73,9 +76,10 @@ julia --project=. -O3 -t 8 main.jl -i input.jpg -o out.svg,out.png,out.gif
 - **Denser / sparser:** `--tau` matters most. Lower values let weaker edges and texture
   seed strokes (0.02 fills almost everything, including noise); higher values give a
   clean outline drawing (0.15). Raise `--points` if edges are left uncovered.
-- **Smoother / more detailed:** `--sigma` 3–4 merges detail into long sweeping strokes;
-  1.0 follows fine detail but wiggles on noise.
-- **Softer look:** wider strokes with lower opacity, e.g. `--stroke-width 2 --opacity 0.6`.
+- **Smoother / more detailed:** `--sigma` 5 gives long coherent strokes; 1.5–3 follows
+  finer detail but strokes wiggle on noise.
+- **Bolder / lighter:** `--stroke-width` scales every stroke; lower `--opacity` for a
+  softer look.
 
 **What works well:** images with strong, coherent direction — impasto paintings
 (Van Gogh), fur, hair, feathers, waves, wood grain, sculpture, engravings.
@@ -130,5 +134,5 @@ EdgeFlowArt.jl/
 
 - **Hatching:** seed new strokes at a fixed offset beside existing ones (Jobard–Lefer) to shade flat regions.
 - **Dark canvas** for images with dark backgrounds.
-- **Palette lock** and stroke width varying with edge strength.
+- **Palette lock** (reuse `kmeans_palette_lab`).
 - **Perlin blend:** mix in noise for Fidenza-style curves.

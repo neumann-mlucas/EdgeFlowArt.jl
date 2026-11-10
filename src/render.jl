@@ -1,4 +1,5 @@
 # Rendering: SVG polylines + anti-aliased PNG / GIF rasterization.
+# Stroke width follows tone (dark = wide) in all three outputs.
 
 # Stroke color = mean source color along the trajectory (rounded pixels).
 # Start-pixel color mislabels paths that cross color boundaries.
@@ -10,6 +11,14 @@ function path_color(img::AbstractMatrix, traj::Vector{Point2})::RGB{N0f8}
     end
     return RGB{N0f8}(acc / length(traj))
 end
+
+# Stroke width from tone: dark strokes wide, light strokes hairline, so the
+# drawing keeps the source's light/dark contrast instead of uniform grey.
+# `base` = width of a mid-grey stroke-ish; black ≈ 3.3×base, white ≈ 0.16×base.
+const TONE_MIN = 0.3
+const TONE_GAIN = 2.2
+tone_width(base::Real, col::RGB{N0f8})::Float32 =
+    Float32(base * (TONE_MIN + TONE_GAIN * (1 - Float64(Gray(col))))^1.5)
 
 # Build SVG document from trajectories.
 function svg_polylines(
@@ -33,7 +42,7 @@ function svg_polylines(
         end
         print(
             io,
-            """\" stroke="$(rgb_hex(col))" stroke-width="$stroke_width" """,
+            """\" stroke="$(rgb_hex(col))" stroke-width="$(round(tone_width(stroke_width, col); digits=2))" """,
             """stroke-opacity="$opacity" fill="none" stroke-linecap="round"/>\n""",
         )
     end
@@ -54,60 +63,62 @@ end
     return nothing
 end
 
-# Anti-aliased line (Xiaolin Wu): per major-axis step, split coverage between
-# the two pixels straddling the line.
-# ponytail: no endpoint coverage; shared polyline vertices get blended twice.
-function draw_line!(
+# Paint one stroke piece (points `pts`, width `wd` px) as anti-aliased round
+# stamps every ≤ 0.5 px. Coverage is max-combined in `cov` first and blended
+# once per pixel, so a stroke never darkens itself where stamps overlap.
+# `cov` is a canvas-sized scratch buffer, left zeroed on return.
+function draw_stroke!(
     canvas::Matrix{RGB{N0f8}},
-    x0::Real,
-    y0::Real,
-    x1::Real,
-    y1::Real,
+    cov::Matrix{Float32},
+    pts::AbstractVector{Point2},
     color::RGB{N0f8},
-    alpha::Float32,
+    opacity::Float32,
+    wd::Float32,
 )
-    cf = RGB{Float32}(color)
-    steep = abs(y1 - y0) > abs(x1 - x0)
-    if steep
-        x0, y0, x1, y1 = y0, x0, y1, x1
-    end
-    if x0 > x1
-        x0, x1, y0, y1 = x1, x0, y1, y0
-    end
-    g = x1 == x0 ? 0.0f0 : Float32((y1 - y0) / (x1 - x0))
-    for x = round(Int, x0):round(Int, x1)
-        y = Float32(y0 + g * (x - x0))
-        yi = floor(Int, y)
-        f = y - yi
-        if steep
-            blend!(canvas, yi, x, cf, alpha * (1 - f))
-            blend!(canvas, yi + 1, x, cf, alpha * f)
-        else
-            blend!(canvas, x, yi, cf, alpha * (1 - f))
-            blend!(canvas, x, yi + 1, cf, alpha * f)
+    h, w = size(canvas)
+    r = max(wd / 2, 0.5f0)
+    R = ceil(Int, r + 1)
+    touched = Int[]
+    stamp(cx, cy) =
+        for y = (round(Int, cy)-R):(round(Int, cy)+R),
+            x = (round(Int, cx)-R):(round(Int, cx)+R)
+
+            (1 <= x <= w && 1 <= y <= h) || continue
+            c = clamp(r + 0.5f0 - hypot(x - cx, y - cy), 0.0f0, 1.0f0)
+            c > 0 || continue
+            i = (x - 1) * h + y
+            cov[i] == 0 && push!(touched, i)
+            cov[i] = max(cov[i], c)
+        end
+    stamp(pts[1]...)
+    for j = 2:length(pts)
+        (x0, y0), (x1, y1) = pts[j-1], pts[j]
+        n = max(1, ceil(Int, 2 * hypot(x1 - x0, y1 - y0)))
+        for k = 1:n
+            stamp(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n)
         end
     end
-    return nothing
-end
-
-function draw_polyline!(canvas, traj::Vector{Point2}, col::RGB{N0f8}, opacity::Float32)
-    for j = 1:(length(traj)-1)
-        (x0, y0), (x1, y1) = traj[j], traj[j+1]
-        draw_line!(canvas, x0, y0, x1, y1, col, opacity)
+    cf = RGB{Float32}(color)
+    for i in touched
+        y, x = mod1(i, h), cld(i, h)
+        blend!(canvas, x, y, cf, opacity * cov[i])
+        cov[i] = 0
     end
 end
 
-# Rasterize all strokes onto a white canvas.
+# Rasterize all strokes onto a white canvas, width per stroke from tone.
 function raster_polylines(
     trajs::Vector{Vector{Point2}},
     colors::Vector{RGB{N0f8}},
     w::Int,
     h::Int;
     opacity::Float32=0.6f0,
+    stroke_width::Float64=1.0,
 )::Matrix{RGB{N0f8}}
     canvas = fill(RGB{N0f8}(1, 1, 1), h, w)
+    cov = zeros(Float32, h, w)
     for (traj, col) in zip(trajs, colors)
-        draw_polyline!(canvas, traj, col, opacity)
+        draw_stroke!(canvas, cov, traj, col, opacity, tone_width(stroke_width, col))
     end
     return canvas
 end
@@ -115,7 +126,9 @@ end
 # GIF frames of all strokes growing at once: frame 1 = a dot at every seed
 # (`heads[i]` = seed index in trajs[i]), then each frame extends every stroke
 # both ways by 1/frames of its own length, so all finish on the last frame.
-# Each segment is blended once (incremental), so the canvas is reused.
+# Pieces are blended incrementally on one canvas.
+# ponytail: the joint pixels between two frames' pieces get blended twice
+# (slightly darker); per-stroke coverage memory if that ever shows.
 function raster_growth(
     trajs::Vector{Vector{Point2}},
     heads::Vector{Int},
@@ -123,22 +136,23 @@ function raster_growth(
     w::Int,
     h::Int;
     opacity::Float32=0.6f0,
+    stroke_width::Float64=1.0,
     frames::Int=60,
 )::Vector{Matrix{RGB{N0f8}}}
     canvas = fill(RGB{N0f8}(1, 1, 1), h, w)
-    for (t, hd, c) in zip(trajs, heads, colors)
-        blend!(canvas, round(Int, t[hd][1]), round(Int, t[hd][2]), RGB{Float32}(c), opacity)
+    cov = zeros(Float32, h, w)
+    wds = [tone_width(stroke_width, c) for c in colors]
+    for (t, hd, c, wd) in zip(trajs, heads, colors, wds)
+        draw_stroke!(canvas, cov, view(t, hd:hd), c, opacity, wd)
     end
     snaps = [copy(canvas)]
     for f = 1:frames
-        for (t, hd, c) in zip(trajs, heads, colors)
+        for (t, hd, c, wd) in zip(trajs, heads, colors, wds)
             nf, nb = length(t) - hd, hd - 1          # segments ahead / behind the seed
             a, b = fld((f - 1) * nf, frames), fld(f * nf, frames)
             p, q = fld((f - 1) * nb, frames), fld(f * nb, frames)
-            for j in Iterators.flatten(((hd+a):(hd+b-1), (hd-q):(hd-p-1)))
-                (x0, y0), (x1, y1) = t[j], t[j+1]
-                draw_line!(canvas, x0, y0, x1, y1, c, opacity)
-            end
+            b > a && draw_stroke!(canvas, cov, view(t, (hd+a):(hd+b)), c, opacity, wd)
+            q > p && draw_stroke!(canvas, cov, view(t, (hd-q):(hd-p)), c, opacity, wd)
         end
         push!(snaps, copy(canvas))
     end
