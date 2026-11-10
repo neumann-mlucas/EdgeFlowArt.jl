@@ -20,10 +20,11 @@ const GIF_HOLD = 18               # extra copies of the last frame (pause before
 Base.@kwdef struct Config
     size::Int = 512
     steps::Int = 400               # integration steps per direction
-    points::Int = 20000            # max seeds (taken cells are skipped)
+    points::Int = 20000            # max seeds (crowded ones are skipped)
     eta::Float32 = 1.0f0           # step size (px per step)
     tau::Float32 = 0.05f0          # seeding: edge threshold on Sobel magnitude
     sigma::Float32 = 5.0f0         # structure-tensor smoothing sigma (px)
+    spacing::Float32 = SPACING     # min gap between stroke seeds (px)
     stroke_width::Float64 = 1.2
     opacity::Float64 = 0.9
     seed::Int = 42
@@ -59,7 +60,7 @@ function render(input::AbstractMatrix, cfg::Config)::Tuple{Canvas,String,Vector{
     seeds = seed_edges(cfg.points, edge_mask(gray, cfg.tau), rng)
 
     @info ts() * "Integrating $(cfg.steps) steps"
-    trajs = integrate(seeds, Fx, Fy, cfg.steps, cfg.eta)
+    trajs = integrate(seeds, Fx, Fy, cfg.steps, cfg.eta; spacing=cfg.spacing)
     keep = length.(trajs) .> 1
     heads = [findfirst(==(s), t) for (s, t) in zip(seeds[keep], trajs[keep])]
     trajs = trajs[keep]

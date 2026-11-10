@@ -67,6 +67,7 @@ julia --project=. -O3 -t 8 main.jl -i input.jpg -o out.svg,out.png,out.gif
 --points N                  max seeds; crowded ones are skipped  default 20000
 --tau T                     edge threshold for seeds             default 0.05
 --sigma S                   structure-tensor smoothing (px)      default 5.0
+--spacing D                 min gap between strokes (px)         default 3.0
 --steps K                   max steps per direction from seed    default 400
 --eta E                     step size (px per step)              default 1.0
 --stroke-width W            base width, scaled by darkness       default 1.2
@@ -75,15 +76,27 @@ julia --project=. -O3 -t 8 main.jl -i input.jpg -o out.svg,out.png,out.gif
 --verbose
 ```
 
-**Tuning:**
+**Tuning** (Van Gogh self-portrait, everything else at defaults):
 
-- **Denser / sparser:** `--tau` matters most. Lower values let weaker edges and texture
-  seed strokes (0.02 fills almost everything, including noise); higher values give a
-  clean outline drawing (0.15). Raise `--points` if edges are left uncovered.
-- **Smoother / more detailed:** `--sigma` 5 gives long coherent strokes; 1.5–3 follows
-  finer detail but strokes wiggle on noise.
-- **Bolder / lighter:** `--stroke-width` scales every stroke; lower `--opacity` for a
-  softer look.
+- **Density:** `--spacing` is the main knob. Strokes start at least D px apart and
+  stop when they come within D/2 of another one. Lower = denser, darker, finer lines;
+  higher = sparse line drawing. It is in pixels, so scale it with `--size`.
+
+  <img src="examples/tuning_spacing.png" alt="--spacing 1.5, 3, 6" width="100%" />
+
+- **Smoothness:** `--sigma` sets how far the flow direction is averaged. Low values follow
+  fine detail but wiggle on noise; high values give long, calm sweeps.
+
+  <img src="examples/tuning_sigma.png" alt="--sigma 2, 5, 8" width="100%" />
+
+- **Weight:** `--stroke-width` scales every stroke (dark strokes stay ~3× wider than
+  light ones); lower `--opacity` for a softer look.
+
+  <img src="examples/tuning_width.png" alt="--stroke-width 0.8, 1.2, 2" width="100%" />
+
+- **Seeds:** `--tau` picks which edges strokes start on. On textured images it barely
+  changes the result, since long strokes fill the gaps anyway (0.02, 0.05 and 0.15 look
+  nearly the same here). `--steps × --eta` caps the stroke length per direction.
 
 **What works well:** images with strong, coherent direction — impasto paintings
 (Van Gogh), fur, hair, feathers, waves, wood grain, sculpture, engravings.

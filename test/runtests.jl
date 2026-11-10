@@ -151,21 +151,26 @@ end
         @test flat < 0.25 * edge
     end
 
-    @testset "spacing: strokes never come within STOP_DIST of each other" begin
+    @testset "spacing: strokes never come within STOP_RATIO × spacing" begin
         # concentric swirl: many strokes run side by side
         Fx = Float32[-(i - 32) for i = 1:64, j = 1:64]
         Fy = Float32[j - 32 for i = 1:64, j = 1:64]
         rng = MersenneTwister(0)
         seeds = [(1 + 63 * rand(rng, Float32), 1 + 63 * rand(rng, Float32)) for _ = 1:300]
+        nlive = Int[]
+        for sp in (1.5f0, 3.0f0, 6.0f0)
+            trajs = EdgeFlowArt.integrate(seeds, Fx, Fy, 200, 1.0f0; spacing=sp)
+            live = [t for t in trajs if length(t) > 1]
+            push!(nlive, length(live))
+            gap = minimum(
+                hypot(p[1] - q[1], p[2] - q[2]) for a = 1:length(live) for
+                b = (a+1):length(live) for p in live[a] for q in live[b];
+                init=Inf32,
+            )
+            @test gap >= EdgeFlowArt.STOP_RATIO * sp
+        end
+        @test nlive[1] > nlive[2] > nlive[3] > 3   # wider spacing = fewer strokes
         trajs = EdgeFlowArt.integrate(seeds, Fx, Fy, 200, 1.0f0)
-        live = [t for t in trajs if length(t) > 1]
-        @test length(live) > 10
-        gap = minimum(
-            hypot(p[1] - q[1], p[2] - q[2]) for a = 1:length(live) for
-            b = (a+1):length(live) for p in live[a] for q in live[b];
-            init=Inf32,
-        )
-        @test gap >= EdgeFlowArt.STOP_DIST
         @test count(==(1) ∘ length, trajs) > 0   # seeds next to a stroke never start
     end
 

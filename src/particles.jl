@@ -57,11 +57,12 @@ function seed_edges(n::Int, mask::BitMatrix, rng::AbstractRNG)::Vector{Point2}
 end
 
 # Jobard–Lefer spacing (px): a stroke starts only where no other stroke is
-# within SPACING, and stops once it comes within STOP_DIST of another one.
+# within `spacing` (default SPACING), and stops once it comes within
+# STOP_RATIO × spacing of another one.
 # Stopping closer than the seed spacing lets neighbours run side by side
 # instead of cutting each other off (a cell test ended 97% of strokes early).
 const SPACING = 3.0f0
-const STOP_DIST = 1.5f0
+const STOP_RATIO = 0.5f0
 # A step shorter than this (px) means the stroke is pinned at the border.
 const MIN_STEP = 0.05f0
 # Field magnitude below this = no direction left (flat image): end the stroke.
@@ -77,13 +78,14 @@ function integrate(
     Fx::Matrix{Float32},
     Fy::Matrix{Float32},
     steps::Int,
-    eta::Float32,
+    eta::Float32;
+    spacing::Float32=SPACING,
 )::Vector{Vector{Point2}}
     h, w = size(Fx)
-    # points bucketed by SPACING-sized cells; distance tests scan the 3×3 block
-    gh, gw = cld(h, Int(SPACING)) + 1, cld(w, Int(SPACING)) + 1
+    # points bucketed by spacing-sized cells; distance tests scan the 3×3 block
+    gh, gw = floor(Int, (h - 1) / spacing) + 1, floor(Int, (w - 1) / spacing) + 1
     grid = [Tuple{Float32,Float32,Int32}[] for _ = 1:gh, _ = 1:gw]
-    cell(x, y) = (floor(Int, (y - 1) / SPACING) + 1, floor(Int, (x - 1) / SPACING) + 1)
+    cell(x, y) = (floor(Int, (y - 1) / spacing) + 1, floor(Int, (x - 1) / spacing) + 1)
     add!(x, y, i) = push!(grid[cell(x, y)...], (x, y, Int32(i)))
     function near(x, y, i, d)
         r, c = cell(x, y)
@@ -106,7 +108,7 @@ function integrate(
             xn = clamp(x + s * vx, 1.0f0, Float32(w))
             yn = clamp(y + s * vy, 1.0f0, Float32(h))
             hypot(xn - x, yn - y) < MIN_STEP && break
-            near(xn, yn, i, STOP_DIST) && break
+            near(xn, yn, i, STOP_RATIO * spacing) && break
             add!(xn, yn, i)
             px, py = xn - x, yn - y
             x, y = xn, yn
@@ -117,7 +119,7 @@ function integrate(
     trajs = [Point2[s] for s in seeds]
     # first strokes run long, later ones fill the gaps
     @inbounds for (i, (x, y)) in enumerate(seeds)
-        near(x, y, i, SPACING) && continue
+        near(x, y, i, spacing) && continue
         add!(x, y, i)
         vx, vy = sample_field(Fx, Fy, x, y)
         fwd = trace(x, y, vx, vy, i)

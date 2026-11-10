@@ -22,6 +22,7 @@ function main()
         eta=Float32(args["eta"]),
         tau=Float32(args["tau"]),
         sigma=Float32(args["sigma"]),
+        spacing=Float32(args["spacing"]),
         stroke_width=args["stroke-width"],
         opacity=args["opacity"],
         seed=args["seed"],
@@ -78,6 +79,11 @@ function parse_cmd()
         help = "tangent field: structure-tensor smoothing sigma (px); higher = smoother, longer strokes"
         arg_type = Float64
         default = 5.0
+        "--spacing"
+        help = "min gap between strokes (px); strokes stop at half of it. Lower = denser, finer lines"
+        arg_type = Float64
+        default = 3.0
+        range_tester = x -> x > 0
         "--stroke-width"
         help = "base stroke width; scaled per stroke by darkness (dark = wide)"
         arg_type = Float64
