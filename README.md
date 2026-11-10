@@ -1,7 +1,7 @@
 # EdgeFlowArt.jl
 
 <p align="center">
-  <img src="examples/starry_night.gif" alt="Van Gogh — The Starry Night, strokes growing along the flow field" width="400px" />
+  <img src="examples/van_gogh_self_portrait.gif" alt="Van Gogh — Self-Portrait (1887), strokes growing along the flow field" width="400px" />
 </p>
 
 EdgeFlowArt.jl turns an image into thousands of flowing strokes that trace its
@@ -15,9 +15,12 @@ stay swirls, fur stays fur. Output is SVG (vector, scalable), an anti-aliased PN
 preview, and a GIF where every stroke grows from a dot to its full length.
 
 <p align="center">
-  <img src="examples/mandrill.png" alt="Mandrill" width="32%" />
-  <img src="examples/great_wave.png" alt="Hokusai — The Great Wave off Kanagawa" width="32%" />
-  <img src="examples/marcus-aurelius.png" alt="Bust of Marcus Aurelius" width="32%" />
+  <img src="examples/van_gogh_road_with_cypress.png" alt="Van Gogh — Road with Cypress and Star" width="32%" />
+  <img src="examples/munch_the_scream.png" alt="Edvard Munch — The Scream" width="32%" />
+  <img src="examples/hokusai_red_fuji.png" alt="Hokusai — Fine Wind, Clear Morning (Red Fuji)" width="32%" />
+</p>
+
+<p align="center"><sub>Source paintings are public domain (Wikimedia Commons).</sub>
 </p>
 
 ## Algorithm
