@@ -1,3 +1,9 @@
+# Julia coverage / allocation tracking
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+
+# harness outputs
 test/results/
 test/artifacts/
 

@@ -15,7 +15,6 @@ function main()
     outputs = EdgeFlowArt.resolve_output(args["output"])
     formats = Set(fmt for (_, fmt) in outputs)
 
-
     cfg = EdgeFlowArt.Config(
         size=args["size"],
         steps=args["steps"],

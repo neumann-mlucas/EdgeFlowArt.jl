@@ -14,7 +14,7 @@ end
 
 # Stroke width from tone: dark strokes wide, light strokes hairline, so the
 # drawing keeps the source's light/dark contrast instead of uniform grey.
-# `base` = width of a mid-grey stroke-ish; black ≈ 3.3×base, white ≈ 0.16×base.
+# width = base·(TONE_MIN + TONE_GAIN·darkness)^1.5: black ≈ 4×base, white ≈ 0.16×base.
 const TONE_MIN = 0.3
 const TONE_GAIN = 2.2
 tone_width(base::Real, col::RGB{N0f8})::Float32 =
@@ -26,8 +26,8 @@ function svg_polylines(
     colors::Vector{RGB{N0f8}},
     w::Int,
     h::Int;
-    stroke_width::Float64=0.6,
-    opacity::Float64=0.6,
+    stroke_width::Float64,
+    opacity::Float64,
     background::String="white",
 )::String
     io = IOBuffer()
